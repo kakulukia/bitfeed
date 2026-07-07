@@ -307,7 +307,7 @@ export default class TxController {
 
   async exploreBlock (block) {
     if (this.block && this.block.id === block.id) {
-      this.showBlock()
+      await this.resumeLatest({ updateUrl: false })
       return
     }
 
@@ -356,7 +356,7 @@ export default class TxController {
     currentBlock.set(block)
   }
 
-  async resumeLatest () {
+  async resumeLatest ({ updateUrl = true } = {}) {
     if (this.explorerBlock && this.explorerBlockScene) {
       const prevBlock = this.explorerBlock
       const prevBlockScene = this.explorerBlockScene
@@ -364,7 +364,7 @@ export default class TxController {
       prevBlockScene.expire(3000)
       this.explorerBlockScene = null
       this.explorerBlock = null
-      urlPath.set("/")
+      if (updateUrl) urlPath.set("/")
     }
     if (this.blockScene && this.block) {
       blockTransitionDirection.set('right')

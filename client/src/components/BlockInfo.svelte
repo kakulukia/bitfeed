@@ -6,7 +6,7 @@
   import Icon from '../components/Icon.svelte'
   import closeIcon from '../assets/icon/cil-x-circle.svg'
   import { shortBtcFormat, longBtcFormat, dateFormat, numberFormat } from '../utils/format.js'
-  import { exchangeRates, settings, blocksEnabled, latestBlockHeight, blockTransitionDirection, loading, freezeResize, fullscreenActive, pageWidth, pageHeight } from '../stores.js'
+  import { exchangeRates, settings, blocksEnabled, latestBlockHeight, blockTransitionDirection, loading, freezeResize, fullscreenActive, pageWidth, pageHeight, overlay } from '../stores.js'
   import { formatCurrency } from '../utils/fx.js'
   import { searchBlockHeight } from '../utils/search.js'
 
@@ -130,8 +130,7 @@
     }
   }
 
-  async function explorePrevBlock (e) {
-    e.preventDefault()
+  async function navigatePrevBlock () {
     if (!$loading && block) {
       loading.increment()
       await searchBlockHeight(block.height - 1)
@@ -139,16 +138,43 @@
     }
   }
 
-  async function exploreNextBlock (e) {
-    e.preventDefault()
+  async function navigateNextBlock ({ routeLatest = false } = {}) {
     if (!$loading && block) {
-      if (block.height + 1 < $latestBlockHeight) {
+      const nextHeight = block.height + 1
+      if (nextHeight < $latestBlockHeight || (routeLatest && nextHeight === $latestBlockHeight)) {
         loading.increment()
-        await searchBlockHeight(block.height + 1)
+        await searchBlockHeight(nextHeight)
         loading.decrement()
       } else {
         dispatch('quitExploring')
       }
+    }
+  }
+
+  async function explorePrevBlock (e) {
+    e.preventDefault()
+    await navigatePrevBlock()
+  }
+
+  async function exploreNextBlock (e) {
+    e.preventDefault()
+    await navigateNextBlock()
+  }
+
+  function isEditableTarget (target) {
+    if (!target) return false
+    const tag = target.tagName
+    return target.isContentEditable || tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT'
+  }
+
+  async function handleKeydown (e) {
+    if (!visible || !block || !$blocksEnabled || $overlay || e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey || isEditableTarget(e.target)) return
+    if (e.key === 'ArrowLeft' && hasPrevBlock) {
+      e.preventDefault()
+      await navigatePrevBlock()
+    } else if (e.key === 'ArrowRight' && hasNextBlock) {
+      e.preventDefault()
+      await navigateNextBlock({ routeLatest: true })
     }
   }
 </script>
@@ -349,6 +375,8 @@
     }
   }
 </style>
+
+<svelte:window on:keydown={handleKeydown} />
 
 {#key transitionDirection}
   {#each ((block != null && visible && $blocksEnabled) ? [block] : []) as block (block.id)}
