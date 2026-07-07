@@ -6,13 +6,14 @@ import BitcoinBlock from '../models/BitcoinBlock.js'
 import TxSprite from '../models/TxSprite.js'
 import { FastVertexArray } from '../utils/memory.js'
 import { searchTx, fetchSpends, addSpends } from '../utils/search.js'
-import { overlay, txCount, mempoolCount, mempoolScreenHeight, blockVisible, currentBlock, selectedTx, detailTx, blockAreaSize, highlight, colorMode, blocksEnabled, latestBlockHeight, explorerBlock, blockTransitionDirection, loading, urlPath } from '../stores.js'
+import { overlay, txCount, mempoolCount, mempoolScreenHeight, blockVisible, currentBlock, selectedTx, detailTx, blockAreaSize, highlight, colorMode, settings, blocksEnabled, latestBlockHeight, explorerBlock, blockTransitionDirection, loading, urlPath } from '../stores.js'
 import config from "../config.js"
 import { tick } from 'svelte';
 
 export default class TxController {
   constructor ({ width, height }) {
     this.vertexArray = new FastVertexArray(2048, TxSprite.dataSize, txCount)
+    this.trailVertexArray = new FastVertexArray(512, TxSprite.dataSize)
     this.debugVertexArray = new FastVertexArray(1024, TxSprite.dataSize)
     this.txs = {}
     this.expiredTxs = {}
@@ -33,8 +34,13 @@ export default class TxController {
 
     this.lastTxTime = 0
     this.txDelay = 0
+    this.showGhostTrails = true
 
     this.blocksEnabled = true
+    settings.subscribe(value => {
+      this.showGhostTrails = value.showGhostTrails !== false
+      if (!this.showGhostTrails) this.poolScene.clearEntryTrails()
+    })
     blocksEnabled.subscribe(enabled => {
       this.blocksEnabled = enabled
     })
@@ -58,7 +64,14 @@ export default class TxController {
   }
 
   getVertexData () {
-    return this.vertexArray.getVertexData()
+    const vertexData = this.vertexArray.getVertexData()
+    if (!this.trailVertexArray.count) return vertexData
+
+    const trailData = this.trailVertexArray.getVertexData()
+    const combined = new Float32Array(vertexData.length + trailData.length)
+    combined.set(vertexData)
+    combined.set(trailData, vertexData.length)
+    return combined
   }
 
   getDebugVertexData () {
@@ -362,6 +375,14 @@ export default class TxController {
   showBlock () {
     if (this.blockScene && !this.explorerBlockScene) {
       this.blockScene.show()
+    }
+  }
+
+  replayLatestBlock () {
+    if (this.blockScene && !this.explorerBlockScene) {
+      blockTransitionDirection.set(null)
+      blockVisible.set(true)
+      this.blockScene.replayBuild()
     }
   }
 

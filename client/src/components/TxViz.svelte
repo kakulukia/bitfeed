@@ -165,6 +165,10 @@
     setBlockOpacity(Date.now() < blockFullOpacityUntil ? 1 : blockDimOpacity, 250)
   }
 
+  function replayBlock () {
+    if (txController) txController.replayLatestBlock()
+  }
+
   function focusBlock () {
     blockHover = true
     setBlockOpacity(1, 250)
@@ -565,7 +569,7 @@
       <div class="spacer" style="flex: {$pageWidth <= 640 ? '1.5' : '1'}"></div>
       <div class="block-area-outer" style="width: {$blockAreaSize}px; height: {$blockAreaSize}px; --block-control-opacity: {blockDisplayOpacity}" on:pointerenter={focusBlock} on:pointerleave={dimBlock}>
         <div class="block-area">
-          <BlockInfo block={$currentBlock} visible={$blockVisible && !$tinyScreen} on:hideBlock={hideBlock} on:quitExploring={quitExploring} />
+          <BlockInfo block={$currentBlock} visible={$blockVisible && !$tinyScreen} on:hideBlock={hideBlock} on:quitExploring={quitExploring} on:replayBlock={replayBlock} />
         </div>
         {#if config.dev && config.debug && $devSettings.guides }
           <div class="guide-area" />

@@ -53,6 +53,10 @@ let settingConfig = {
     trueLabel: 'fee rate',
     valueType: 'bool'
   },
+  showGhostTrails: {
+    label: 'Ghost Trails',
+    valueType: 'bool'
+  },
   showSearch: {
     label: 'Search Bar',
     valueType: 'bool'

@@ -1,4 +1,5 @@
 import config from '../config.js'
+import TxSprite from './TxSprite.js'
 
 export default class TxPoolScene {
   constructor ({ width, height, unit, padding, controller, heightStore, colorMode }) {
@@ -208,6 +209,74 @@ export default class TxPoolScene {
     }
   }
 
+  clearEntryTrail (tx) {
+    if (!tx || !tx.entryTrail) return
+    tx.entryTrail.timers.forEach(timer => clearTimeout(timer))
+    tx.entryTrail.sprites.forEach(sprite => sprite.destroy())
+    tx.entryTrail = null
+  }
+
+  clearEntryTrails () {
+    Object.values(this.txs).forEach(tx => this.clearEntryTrail(tx))
+    Object.values(this.hiddenTxs).forEach(tx => this.clearEntryTrail(tx))
+  }
+
+  createEntryTrail (tx, txColor, entry) {
+    if (!this.controller.showGhostTrails) return
+    const vertexArray = this.controller.trailVertexArray
+    if (!vertexArray || !tx.screenPosition.r) return
+
+    this.clearEntryTrail(tx)
+    tx.entryTrail = { sprites: [], timers: [] }
+
+    const schedule = (callback, delay) => {
+      const timer = setTimeout(() => {
+        if (!tx.entryTrail) return
+        tx.entryTrail.timers = tx.entryTrail.timers.filter(item => item !== timer)
+        callback()
+      }, delay)
+      tx.entryTrail.timers.push(timer)
+    }
+
+    for (let i = 0; i < 3; i++) {
+      const lag = 90 + (i * 105)
+      const alpha = 0.16 - (i * 0.035)
+      const radius = Math.max(1, tx.screenPosition.r * (0.9 - (i * 0.12)))
+
+      schedule(() => {
+        if (!this.txs[tx.id] || !tx.view || !tx.view.initialised) return
+        const sprite = new TxSprite({
+          x: entry.grow.x,
+          y: entry.grow.y,
+          r: Math.max(1, entry.grow.r * 0.8),
+          h: txColor.color.h,
+          l: txColor.color.l,
+          alpha
+        }, vertexArray)
+        tx.entryTrail.sprites.push(sprite)
+        sprite.update({
+          x: tx.screenPosition.x,
+          y: tx.screenPosition.y,
+          r: radius,
+          duration: entry.duration + (i * 140),
+          delay: 0,
+          smooth: true
+        })
+        schedule(() => {
+          if (!tx.entryTrail || !tx.entryTrail.sprites.includes(sprite)) return
+          sprite.update({
+            alpha: 0,
+            duration: 420,
+            delay: 0,
+            smooth: true
+          })
+        }, Math.max(300, entry.duration * 0.55))
+      }, entry.delay + entry.growDuration + lag)
+    }
+
+    schedule(() => this.clearEntryTrail(tx), entry.delay + entry.growDuration + entry.duration + 1000)
+  }
+
   setTxOnScreen (tx, insertDelay=0) {
     this.saveGridToPixelPosition(tx)
     this.savePixelsToScreenPosition(tx)
@@ -226,6 +295,7 @@ export default class TxPoolScene {
         delay: 0,
         state: 'ready'
       })
+      this.createEntryTrail(tx, txColor, entry)
       tx.view.update({
         display: {
           position: entry.grow
@@ -339,7 +409,9 @@ export default class TxPoolScene {
   }
 
   remove (id) {
-    let exists = !!this.txs[id]
+    const tx = this.txs[id]
+    let exists = !!tx
+    this.clearEntryTrail(tx)
     delete this.txs[id]
     return exists
   }

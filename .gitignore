@@ -16,3 +16,6 @@ CLAUDE.md
 .beads/README.md
 .beads/hooks/
 .beads/interactions.jsonl
+
+# bv (beads viewer) local config and caches
+.bv/

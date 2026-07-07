@@ -100,6 +100,7 @@ const defaultSettings = {
 	showFX: true,
 	vbytes: false,
 	colorByFee: true,
+	showGhostTrails: true,
 	showMessages: false,
 	showSearch: false,
 	noTrack: false,
