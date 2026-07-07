@@ -5,7 +5,7 @@
   import { createEventDispatcher } from 'svelte'
   import Icon from '../components/Icon.svelte'
   import closeIcon from '../assets/icon/cil-x-circle.svg'
-  import { shortBtcFormat, longBtcFormat, dateFormat, numberFormat } from '../utils/format.js'
+  import { shortBtcFormat, longBtcFormat, dateFormat, numberFormat, feeRateFormat } from '../utils/format.js'
   import { exchangeRates, settings, blocksEnabled, latestBlockHeight, blockTransitionDirection, loading, freezeResize, fullscreenActive, pageWidth, pageHeight, overlay } from '../stores.js'
   import { formatCurrency } from '../utils/fx.js'
   import { searchBlockHeight } from '../utils/search.js'
@@ -117,7 +117,7 @@
 
   function formatFee (n) {
     if (n) {
-      return numberFormat.format(n.toFixed(2))
+      return feeRateFormat.format(n)
     } else return  '0'
   }
 

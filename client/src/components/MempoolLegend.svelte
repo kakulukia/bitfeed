@@ -74,8 +74,8 @@ function formatBytes (bytes) {
 
 function formatValue (value) {
   const btc = value / 100000000
-  const str = (btc < 1) ? btc.toPrecision(1) : `${Math.floor(btc)}`
-  const units = str.split('.')[0].length
+  const str = (btc < 1) ? btc.toLocaleString(undefined, { maximumSignificantDigits: 1 }) : numberFormat.format(Math.floor(btc))
+  const units = str.split(/[,.]/)[0].length
   const padded = str.padEnd(3 + units, ' ').padStart(6, ' ')
   return padded
 }

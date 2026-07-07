@@ -1,5 +1,5 @@
 <script>
-import { longBtcFormat, numberFormat } from '../utils/format.js'
+import { longBtcFormat, numberFormat, feeRateFormat } from '../utils/format.js'
 import { exchangeRates, settings } from '../stores.js'
 import { formatCurrency } from '../utils/fx.js'
 import { hlToHex } from '../utils/color.js'
@@ -139,7 +139,7 @@ function formatBTC (sats) {
   {/if}
   <p class="field vbytes">Size: { numberFormat.format(tx.vbytes) } vbytes</p>
   {#if !tx.coinbase && tx.fee != null }
-    <p class="field feerate">Fee rate: { numberFormat.format(tx.feerate.toFixed(2)) } sats/vbyte</p>
+    <p class="field feerate">Fee rate: { feeRateFormat.format(tx.feerate) } sats/vbyte</p>
     <p class="field fee">Fee: { numberFormat.format(tx.fee) } sats</p>
   {:else if !tx.coinbase && tx.fee == null}
     <p class="field feerate">Fee rate: unavailable</p>

@@ -20,7 +20,7 @@ function onClose () {
 }
 
 function formatBTC (sats) {
-  return `₿ ${(sats/100000000).toFixed(8)}`
+  return `₿ ${longBtcFormat.format(sats/100000000)}`
 }
 
 function toggleWatchlist (query) {
@@ -697,7 +697,7 @@ async function goToBlock(e) {
             <span class="operator">=</span>
             <div class="field">
               <span class="label">fee rate</span>
-              <span class="value" style="color: {feeColor};">{ numberFormat.format($detailTx.feerate.toFixed(2)) } sats/vbyte</span>
+              <span class="value" style="color: {feeColor};">{ feeRateFormat.format($detailTx.feerate) } sats/vbyte</span>
             </div>
           </div>
         {:else}
