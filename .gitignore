@@ -1,1 +1,18 @@
 TIMESTAMP.txt
+
+# Local agent/tool state
+.agents/
+.claude/
+.codex/
+.codegraph/
+AGENTS.md
+CLAUDE.md
+
+# Beads / Dolt files
+.dolt/
+*.db
+.beads-credential-key
+.beads/proxieddb/
+.beads/README.md
+.beads/hooks/
+.beads/interactions.jsonl

@@ -19,6 +19,7 @@ export default class TxBlockScene extends TxMondrianPoolScene {
     this.initialised = true
     this.inverted = true
     this.hidden = false
+    this.opacity = 0.21
     this.sceneType = 'block'
   }
 
@@ -84,7 +85,10 @@ export default class TxBlockScene extends TxMondrianPoolScene {
       tx.view.update({
         display: {
           position: tx.screenPosition,
-          color: tx.getColor('block', this.colorMode).color
+          color: {
+            ...tx.getColor('block', this.colorMode).color,
+            alpha: 0
+          }
         },
         duration: 0,
         delay: 0,
@@ -94,7 +98,10 @@ export default class TxBlockScene extends TxMondrianPoolScene {
       tx.view.update({
         display: {
           position: tx.screenPosition,
-          color: tx.getColor('block', this.colorMode).color
+          color: {
+            ...tx.getColor('block', this.colorMode).color,
+            alpha: this.opacity
+          }
         },
         duration: this.laidOut ? 1000 : 2000,
         delay: 200,
@@ -154,6 +161,25 @@ export default class TxBlockScene extends TxMondrianPoolScene {
     this.prepareTxOnScreen(tx)
   }
 
+  setOpacity (opacity, duration=250) {
+    this.opacity = opacity
+    if (this.hidden) return
+
+    const ids = this.getActiveTxList()
+    for (let i = 0; i < ids.length; i++) {
+      this.txs[ids[i]].view.update({
+        display: {
+          color: {
+            alpha: opacity
+          }
+        },
+        duration,
+        delay: 0,
+        state: 'block'
+      })
+    }
+  }
+
   enterTx (tx, start, right) {
     tx.view.update({
       display: {
@@ -175,7 +201,7 @@ export default class TxBlockScene extends TxMondrianPoolScene {
         position: tx.screenPosition,
         color: {
           ...tx.getColor('block', this.colorMode).color,
-          alpha: 1
+          alpha: this.opacity
         }
       },
       start,
@@ -270,7 +296,7 @@ export default class TxBlockScene extends TxMondrianPoolScene {
           y: tx.screenPosition.y
         },
         color: {
-          alpha: 1
+          alpha: this.opacity
         }
       },
       start: now,

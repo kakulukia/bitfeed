@@ -1,8 +1,6 @@
 import { writable, derived } from 'svelte/store'
 import { tweened } from 'svelte/motion';
 import { makePollStore } from './utils/pollStore.js'
-import LocaleCurrency from 'locale-currency'
-import { currencies } from './utils/fx.js'
 import config from './config.js'
 
 function createCounter () {
@@ -95,18 +93,15 @@ export const blockAreaSize = writable(0)
 
 export const settingsOpen = writable(false)
 
-let localeCurrencyCode = LocaleCurrency.getCurrency(navigator.language)
-if (!currencies[localeCurrencyCode]) localeCurrencyCode = 'USD'
-
 const defaultSettings = {
 	darkMode: true,
 	showNetworkStatus: true,
-	currency: localeCurrencyCode,
+	currency: 'USD',
 	showFX: true,
 	vbytes: false,
-	colorByFee: false,
-	showMessages: true,
-	showSearch: true,
+	colorByFee: true,
+	showMessages: false,
+	showSearch: false,
 	noTrack: false,
 	blocksEnabled: true
 }
@@ -121,7 +116,6 @@ const urlSettings = Object.keys(defaultSettings).reduce((map, key) => {
 
 	return map
 }, {})
-if (urlSettings.showMessages == null) urlSettings.showMessages = true
 if (urlSettings.blocksEnabled == null) urlSettings.blocksEnabled = true
 
 export const settings = createCachedDict('settings', urlSettings, defaultSettings)

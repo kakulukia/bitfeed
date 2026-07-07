@@ -1,0 +1,7 @@
+{
+  "database": "dolt",
+  "backend": "dolt",
+  "dolt_mode": "embedded",
+  "dolt_database": "bitfeed",
+  "project_id": "451af4ca-8ba0-4001-b42c-321c0623977e"
+}

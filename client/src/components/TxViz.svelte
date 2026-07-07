@@ -30,6 +30,14 @@
   let running = false
 
   let lastFrameUpdate = 0
+  const blockFullOpacityMs = 21000
+  const blockDimOpacity = 0.21
+  let blockOpacityTimeout
+  let blockOpacityBlockId
+  let blockFullOpacityUntil = 0
+  let blockHover = false
+  let blockDisplayOpacity = blockDimOpacity
+  let firstBlockOpacity = true
 
   let txStream
   if (!config.noTxFeed || !config.noBlockFeed) txStream = getTxStream()
@@ -39,6 +47,12 @@
       if (txController) txController.showBlock()
     } else {
       if (txController) txController.hideBlock()
+    }
+  }
+
+  $: {
+    if (txController && $currentBlock && $currentBlock.id !== blockOpacityBlockId) {
+      showNewBlockAtFullOpacity($currentBlock)
     }
   }
 
@@ -124,6 +138,41 @@
 
   function quitExploring () {
     if (txController) txController.resumeLatest()
+  }
+
+  function showNewBlockAtFullOpacity (block) {
+    if (blockOpacityTimeout) clearTimeout(blockOpacityTimeout)
+    blockOpacityBlockId = block.id
+    blockFullOpacityUntil = firstBlockOpacity ? Date.now() + blockFullOpacityMs : block.time + blockFullOpacityMs
+    firstBlockOpacity = false
+
+    if (!blockHover) setBlockOpacity(Date.now() < blockFullOpacityUntil ? 1 : blockDimOpacity, 250)
+    if (Date.now() < blockFullOpacityUntil) {
+      blockOpacityTimeout = setTimeout(() => {
+        if ($currentBlock && $currentBlock.id === block.id && !blockHover) {
+          setBlockOpacity(blockDimOpacity, 1200)
+        }
+      }, blockFullOpacityUntil - Date.now())
+    }
+  }
+
+  function setBlockOpacity (opacity, duration=250) {
+    blockDisplayOpacity = opacity
+    if (txController) txController.setBlockOpacity(opacity, duration)
+  }
+
+  function restoreBlockOpacity () {
+    setBlockOpacity(Date.now() < blockFullOpacityUntil ? 1 : blockDimOpacity, 250)
+  }
+
+  function focusBlock () {
+    blockHover = true
+    setBlockOpacity(1, 250)
+  }
+
+  function dimBlock () {
+    blockHover = false
+    restoreBlockOpacity()
   }
 
   function fakeBlock () {
@@ -386,6 +435,7 @@
     .block-area-outer {
       position: relative;
       flex: 0;
+      pointer-events: auto;
       // width: 75vw;
       // max-width: 40vh;
       margin: auto;
@@ -513,7 +563,7 @@
 
     <div class="block-area-wrapper">
       <div class="spacer" style="flex: {$pageWidth <= 640 ? '1.5' : '1'}"></div>
-      <div class="block-area-outer" style="width: {$blockAreaSize}px; height: {$blockAreaSize}px">
+      <div class="block-area-outer" style="width: {$blockAreaSize}px; height: {$blockAreaSize}px; --block-control-opacity: {blockDisplayOpacity}" on:pointerenter={focusBlock} on:pointerleave={dimBlock}>
         <div class="block-area">
           <BlockInfo block={$currentBlock} visible={$blockVisible && !$tinyScreen} on:hideBlock={hideBlock} on:quitExploring={quitExploring} />
         </div>

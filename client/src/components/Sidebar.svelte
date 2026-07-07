@@ -1,4 +1,5 @@
 <script>
+import { onMount } from 'svelte'
 import config from '../config.js'
 import analytics from '../utils/analytics.js'
 
@@ -16,6 +17,8 @@ import gridIcon from '../assets/icon/grid-icon.svg'
 import peopleIcon from '../assets/icon/cil-people.svg'
 import giftIcon from '../assets/icon/cil-gift.svg'
 import bookmarkIcon from '../assets/icon/cil-bookmark.svg'
+import fullscreenIcon from '../assets/icon/cil-fullscreen.svg'
+import fullscreenExitIcon from '../assets/icon/cil-fullscreen-exit.svg'
 import MempoolLegend from '../components/MempoolLegend.svelte'
 import ContactTab from '../components/ContactTab.svelte'
 import SearchTab from '../components/SearchTab.svelte'
@@ -23,9 +26,17 @@ import SearchTab from '../components/SearchTab.svelte'
 import { sidebarToggle, overlay, currentBlock, blockVisible, haveSupporters, freezeResize } from '../stores.js'
 
 let searchTabComponent
+let fullscreen = false
+let fullscreenTarget = null
 
 let blockHidden = false
 $: blockHidden = ($currentBlock && !$blockVisible)
+
+onMount(() => {
+  syncFullscreen()
+  document.addEventListener('fullscreenchange', syncFullscreen)
+  return () => document.removeEventListener('fullscreenchange', syncFullscreen)
+})
 
 function settings (tab) {
   if ($sidebarToggle) analytics.trackEvent('sidebar', $sidebarToggle, 'close')
@@ -44,6 +55,34 @@ function openOverlay (key) {
 function showBlock () {
   analytics.trackEvent('viz', 'block', 'show')
   $blockVisible = true
+}
+
+function syncFullscreen () {
+  const actualFullscreen = !!document.fullscreenElement
+  if (fullscreenTarget != null && actualFullscreen !== fullscreenTarget) return
+
+  fullscreenTarget = null
+  fullscreen = actualFullscreen
+}
+
+async function toggleFullscreen () {
+  const targetFullscreen = !fullscreen
+  fullscreenTarget = targetFullscreen
+  fullscreen = targetFullscreen
+
+  try {
+    if (targetFullscreen) {
+      await document.documentElement.requestFullscreen()
+    } else {
+      await document.exitFullscreen()
+    }
+    syncFullscreen()
+    analytics.trackEvent('viz', 'fullscreen', fullscreen ? 'enter' : 'exit')
+  } catch (e) {
+    fullscreenTarget = null
+    syncFullscreen()
+    console.warn('fullscreen unavailable', e)
+  }
 }
 </script>
 
@@ -129,6 +168,11 @@ function showBlock () {
     <div slot="content">
       <SearchTab tab={searchTabComponent} />
     </div>
+  </SidebarTab>
+  <SidebarTab on:click={toggleFullscreen} tooltip={fullscreen ? 'Exit Fullscreen' : 'Fullscreen'}>
+    <span slot="tab" title={fullscreen ? 'Exit Fullscreen' : 'Fullscreen'}>
+      <Icon icon={fullscreen ? fullscreenExitIcon : fullscreenIcon} color="var(--bold-a)" />
+    </span>
   </SidebarTab>
   <SidebarTab open={$sidebarToggle === 'settings'} on:click={() => {settings('settings')}} tooltip="Settings">
     <span slot="tab" title="Settings">

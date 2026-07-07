@@ -365,6 +365,11 @@ export default class TxController {
     }
   }
 
+  setBlockOpacity (opacity, duration) {
+    if (this.blockScene) this.blockScene.setOpacity(opacity, duration)
+    if (this.explorerBlockScene) this.explorerBlockScene.setOpacity(opacity, duration)
+  }
+
   clearBlock () {
     if (this.blockScene) {
       this.blockScene.exitLeft()

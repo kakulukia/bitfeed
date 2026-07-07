@@ -184,18 +184,40 @@ export default class TxPoolScene {
     this.scroll(this.heightLimit - bottom)
   }
 
+  entryAnimation (tx, insertDelay=0) {
+    const weight = Math.min(1, tx.pixelPosition.r / 22)
+    const spawnTopTwoThirds = window.innerHeight * 2 / 3
+    const spawnX = Math.random() * window.innerWidth
+    const spawnY = window.innerHeight - (Math.random() * spawnTopTwoThirds)
+    const growRadius = tx.screenPosition.r * 0.3
+
+    return {
+      start: {
+        x: spawnX,
+        y: spawnY,
+        r: 0
+      },
+      grow: {
+        x: spawnX,
+        y: spawnY,
+        r: growRadius
+      },
+      delay: insertDelay + (Math.random() * 2200),
+      growDuration: 900 + (Math.random() * 500),
+      duration: 1600 + ((1 - weight) * 450) + (Math.random() * 450)
+    }
+  }
+
   setTxOnScreen (tx, insertDelay=0) {
     this.saveGridToPixelPosition(tx)
     this.savePixelsToScreenPosition(tx)
     if (!tx.view.initialised) {
       const txColor = tx.getColor(this.sceneType, this.colorMode)
+      const entry = this.entryAnimation(tx, insertDelay)
+      const start = performance.now()
       tx.view.update({
         display: {
-          position: this.pixelsToScreen({
-            x: tx.pixelPosition.x,
-            y: window.innerHeight + 10,
-            r: this.unitWidth / 2
-          }),
+          position: entry.start,
           color: {
             ...txColor.color,
             alpha: 1
@@ -206,13 +228,46 @@ export default class TxPoolScene {
       })
       tx.view.update({
         display: {
-          position: tx.screenPosition,
-          color: txColor.color
+          position: entry.grow
         },
-        duration: 2500,
-        delay: insertDelay,
+        start,
+        duration: entry.growDuration,
+        delay: entry.delay,
+        smooth: true,
         state: 'pool'
       })
+      // TxSprite stores one transition per attribute, so later phases must be scheduled after initial growth.
+      setTimeout(() => {
+        if (!this.txs[tx.id] || !tx.view || !tx.view.initialised) return
+        this.saveGridToPixelPosition(tx)
+        this.savePixelsToScreenPosition(tx)
+        tx.view.update({
+          display: {
+            position: tx.screenPosition
+          },
+          duration: entry.duration,
+          delay: 0,
+          smooth: true,
+          state: 'pool'
+        })
+        setTimeout(() => {
+          if (!this.txs[tx.id] || !tx.view || !tx.view.initialised) return
+          this.saveGridToPixelPosition(tx)
+          this.savePixelsToScreenPosition(tx)
+          tx.view.update({
+            display: {
+              position: {
+                r: tx.screenPosition.r * 1.18
+              }
+            },
+            duration: 220,
+            delay: 0,
+            smooth: true,
+            boomerang: true,
+            state: 'pool'
+          })
+        }, entry.duration)
+      }, entry.delay + entry.growDuration)
       if (txColor.endColor) {
         tx.view.update({
           display: {

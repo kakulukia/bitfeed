@@ -167,6 +167,8 @@
     cursor: pointer;
     pointer-events: all;
     font-size: 1.2em;
+    opacity: var(--block-control-opacity, 1);
+    transition: opacity 250ms;
 
     &.standalone {
       display: none;
@@ -251,6 +253,8 @@
     bottom: 10%;
     padding: .75em;
     pointer-events: all;
+    opacity: var(--block-control-opacity, 1);
+    transition: opacity 250ms;
 
     &.prev {
       right: 100%
@@ -295,7 +299,8 @@
     right: 100%;
     padding-right: .5rem;
 
-    min-width: 0;
+    min-width: 13rem;
+    text-align: right;
     transform: translateX(0);
 
     .data-row {
@@ -310,7 +315,7 @@
     }
 
     .data-field {
-      white-space: wrap;
+      white-space: nowrap;
       margin-left: 0;
       margin-right: 5px;
 
@@ -323,7 +328,6 @@
       }
     }
   }
-
   .standalone.landscape.close-button {
     display: block;
     position: absolute;
