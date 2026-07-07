@@ -70,15 +70,14 @@ defmodule BitcoinStream.Mempool.Sync do
         Process.send_after(self(), :resync, 5 * 1000)
 
       false ->
-        with  {:ok, 200, %{"size" => size}} when is_integer(size) <- RPC.request(:rpc, "getmempoolinfo", []),
+        with  {:ok, 200, %{"size" => size, "bytes" => bytes}} when is_integer(size) and is_integer(bytes) <- RPC.request(:rpc, "getmempoolinfo", []),
               count when is_integer(count) <- Mempool.get(:mempool) do
           Logger.debug("Mempool health check - Core count: #{size} | Bitfeed count: #{count}");
 
-          # if we've diverged from the true count by more than 50 txs, then fix
-          # ensures our count doesn't stray too far due to missed events & unexpected errors.
-          if (abs(size - count) > 50) do
+          # If we've diverged from Core, repair both count and total virtual size.
+          if (abs(size - count) > 50 or abs(bytes - Mempool.get_vbytes(:mempool)) > 50_000) do
             Logger.debug("resync");
-            Mempool.set(:mempool, size);
+            Mempool.set(:mempool, size, bytes);
             newcount = Mempool.get(:mempool);
             Logger.debug("updated to #{newcount}");
           end

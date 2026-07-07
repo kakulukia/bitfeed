@@ -3,13 +3,15 @@ import http from 'node:http'
 import https from 'node:https'
 import net from 'node:net'
 import path from 'node:path'
+import tls from 'node:tls'
 import { fileURLToPath } from 'node:url'
 
-const port = Number(process.env.PORT || 5000)
+const port = Number(process.env.PORT || 5001)
 const host = process.env.HOST || '127.0.0.1'
-const wsTarget = process.env.BITFEED_WS_TARGET || 'umbrel.local:8314'
-// ponytail: Umbrel's host proxy redirects unauthenticated REST calls; use public REST for local display edits.
-const apiTarget = new URL(process.env.BITFEED_API_TARGET || 'https://bits.monospace.live')
+const targetUrl = (value, fallbackProtocol) =>
+  new URL(value.includes('://') ? value : `${fallbackProtocol}://${value}`)
+const wsTarget = targetUrl(process.env.BITFEED_WS_TARGET || 'wss://bits.monospace.live', 'ws')
+const apiTarget = targetUrl(process.env.BITFEED_API_TARGET || 'https://bits.monospace.live', 'https')
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../public/build')
 
 const types = {
@@ -66,20 +68,24 @@ const server = http.createServer((req, res) => {
 
 server.on('upgrade', (req, socket, head) => {
   if (!req.url.startsWith('/ws/')) return socket.destroy()
-  const upstream = net.connect(Number(wsTarget.split(':')[1]), wsTarget.split(':')[0], () => {
+  const upstreamPort = Number(wsTarget.port || (wsTarget.protocol === 'wss:' ? 443 : 80))
+  const writeUpgrade = () => {
     upstream.write(`${req.method} ${req.url} HTTP/${req.httpVersion}\r\n`)
-    for (const [name, value] of Object.entries({ ...req.headers, host: wsTarget })) {
+    for (const [name, value] of Object.entries({ ...req.headers, host: wsTarget.host })) {
       upstream.write(`${name}: ${value}\r\n`)
     }
     upstream.write('\r\n')
     if (head.length) upstream.write(head)
     socket.pipe(upstream).pipe(socket)
-  })
+  }
+  const upstream = wsTarget.protocol === 'wss:'
+    ? tls.connect({ host: wsTarget.hostname, port: upstreamPort, servername: wsTarget.hostname }, writeUpgrade)
+    : net.connect({ host: wsTarget.hostname, port: upstreamPort }, writeUpgrade)
   upstream.on('error', () => socket.destroy())
 })
 
 server.listen(port, host, () => {
   console.log(`Bitfeed dev server: http://${host}:${port}`)
-  console.log(`  /ws  -> ws://${wsTarget}`)
+  console.log(`  /ws  -> ${wsTarget.origin}`)
   console.log(`  /api -> ${apiTarget.origin}`)
 })

@@ -48,3 +48,12 @@ export const durationFormat = {
     else return relativeTimeFormat.format(Math.round(seconds / 60), Math.abs(Math.round(seconds / 60)) == 1 ? 'minute' : 'minutes')
   }
 }
+
+const blockVbytes = 1000000
+
+export function formatMempoolBlockEstimate (vbytes) {
+  if (vbytes <= 0) return null
+  if (vbytes < blockVbytes) return '<1 block'
+  const blocks = Math.ceil(vbytes / blockVbytes)
+  return `~${numberFormat.format(blocks)} block${blocks === 1 ? '' : 's'}`
+}

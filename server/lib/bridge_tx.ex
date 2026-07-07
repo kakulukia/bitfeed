@@ -67,7 +67,8 @@ defmodule BitcoinStream.Bridge.Tx do
   end
 
   defp send_txn(txn, count) do
-    case Jason.encode(%{type: "txn", txn: txn, count: count}) do
+    vbytes = Mempool.get_vbytes(:mempool)
+    case Jason.encode(%{type: "txn", txn: txn, count: count, vbytes: vbytes}) do
       {:ok, payload} ->
         Registry.dispatch(Registry.BitcoinStream, "txs", fn(entries) ->
           for {pid, _} <- entries do

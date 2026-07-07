@@ -17,7 +17,7 @@
   import SupportersOverlay from '../components/SupportersOverlay.svelte'
   import LoadingAnimation from '../components/util/LoadingAnimation.svelte'
   import Alerts from '../components/alert/Alerts.svelte'
-  import { numberFormat } from '../utils/format.js'
+  import { formatMempoolBlockEstimate, numberFormat } from '../utils/format.js'
   import { exchangeRates, lastBlockId, haveSupporters, sidebarToggle } from '../stores.js'
   import { formatCurrency } from '../utils/fx.js'
   import { fade } from 'svelte/transition'
@@ -39,6 +39,12 @@
   let blockDisplayOpacity = blockDimOpacity
   let firstBlockOpacity = true
   let lastReplayBlockTrigger = 0
+  let roundedMempoolCount = 0
+  let mempoolVbytes = 0
+  let mempoolBlockEstimate = null
+
+  $: roundedMempoolCount = Math.round($mempoolCount)
+  $: mempoolBlockEstimate = formatMempoolBlockEstimate(mempoolVbytes)
 
   let txStream
   if (!config.noTxFeed || !config.noBlockFeed) txStream = getTxStream()
@@ -107,8 +113,14 @@
       })
     }
     if (!config.noTxFeed || !config.noBlockFeed) {
-      txStream.subscribe('mempool_count', count => {
-        $mempoolCount = count
+      txStream.subscribe('mempool_count', mempool => {
+        if (typeof mempool === 'number') {
+          $mempoolCount = mempool
+          mempoolVbytes = 0
+        } else {
+          $mempoolCount = mempool.count
+          mempoolVbytes = mempool.vbytes || 0
+        }
       })
     }
 
@@ -566,10 +578,10 @@
       {#if $tinyScreen}
         <div class="mempool-info">
           <span class="left">Mempool</span>
-          <span class="right">{ numberFormat.format(Math.round($mempoolCount)) }</span>
+          <span class="right">{ numberFormat.format(roundedMempoolCount) }</span>
         </div>
       {:else}
-        <span class="mempool-count">Mempool: { numberFormat.format(Math.round($mempoolCount)) } unconfirmed</span>
+        <span class="mempool-count">Mempool: { numberFormat.format(roundedMempoolCount) } tx{#if mempoolBlockEstimate}{' / '}{mempoolBlockEstimate}{/if} unconfirmed</span>
       {/if}
     </div>
 

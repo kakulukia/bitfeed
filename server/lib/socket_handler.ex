@@ -35,7 +35,8 @@ defmodule BitcoinStream.SocketHandler do
 
   def get_mempool_count_msg() do
     count = Mempool.get(:mempool);
-    "{ \"type\": \"count\", \"count\": #{count}}"
+    vbytes = Mempool.get_vbytes(:mempool);
+    "{ \"type\": \"count\", \"count\": #{count}, \"vbytes\": #{vbytes}}"
   end
 
   def get_block_id_msg() do

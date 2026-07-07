@@ -68,7 +68,8 @@ defmodule BitcoinStream.Bridge.Block do
   end
 
   defp send_block(block, count) do
-    case Jason.encode(%{type: "block", block: %{id: block.id}, drop: count}) do
+    vbytes = Mempool.get_vbytes(:mempool)
+    case Jason.encode(%{type: "block", block: %{id: block.id}, drop: count, count: count, vbytes: vbytes}) do
       {:ok, payload} ->
         Registry.dispatch(Registry.BitcoinStream, "txs", fn(entries) ->
           for {pid, _} <- entries do

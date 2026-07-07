@@ -1,0 +1,11 @@
+[tasks."server:compile"]
+description = "Compile the server with the Dockerfile toolchain, Elixir 1.11 / OTP 23"
+run = "container build --tag bitfeed-server:local server"
+
+[tasks."server:test"]
+description = "Run server tests inside the Elixir 1.11 / OTP 23 container toolchain"
+run = "server/scripts/test-elixir11-container.sh"
+
+[tasks."server:test-mempool"]
+description = "Run the mempool regression test inside the Elixir 1.11 / OTP 23 container toolchain"
+run = "server/scripts/test-elixir11-container.sh test/mempool_test.exs"

@@ -96,6 +96,10 @@ class TxStream {
     this.websocket.send("block_id")
   }
 
+  sendMempoolCountRequest () {
+    this.websocket.send("count")
+  }
+
   disconnect () {
     console.log('disconnecting websocket')
     if (this.websocket) {
@@ -117,6 +121,7 @@ class TxStream {
     this.setDelay(0)
     this.reconnectBackoff = 128
     this.sendHeartbeat()
+    this.sendMempoolCountRequest()
     this.sendBlockRequest()
   }
 
@@ -170,8 +175,8 @@ class TxStream {
             break;
         }
 
-        // all events can include a count field, with the latest mempool size
-        if (msg.count) window.dispatchEvent(new CustomEvent('bitcoin_mempool_count', { detail: msg.count }))
+        // all events can include count/vbytes fields, with the latest mempool size
+        if (msg.count != null) window.dispatchEvent(new CustomEvent('bitcoin_mempool_count', { detail: { count: msg.count, vbytes: msg.vbytes || 0 } }))
       } catch (err) {
         console.log('error parsing msg json: ', err)
       }
