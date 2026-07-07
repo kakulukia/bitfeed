@@ -13,12 +13,13 @@
   import Sidebar from '../components/Sidebar.svelte'
   import TransactionOverlay from '../components/TransactionOverlay.svelte'
   import AboutOverlay from '../components/AboutOverlay.svelte'
+  import PriceChartBackground from '../components/PriceChartBackground.svelte'
   import DonationOverlay from '../components/DonationOverlay.svelte'
   import SupportersOverlay from '../components/SupportersOverlay.svelte'
   import LoadingAnimation from '../components/util/LoadingAnimation.svelte'
   import Alerts from '../components/alert/Alerts.svelte'
   import { formatMempoolBlockEstimate, numberFormat } from '../utils/format.js'
-  import { exchangeRates, lastBlockId, haveSupporters, sidebarToggle } from '../stores.js'
+  import { exchangeRates, lastBlockId, haveSupporters } from '../stores.js'
   import { formatCurrency } from '../utils/fx.js'
   import { fade } from 'svelte/transition'
   import config from '../config.js'
@@ -230,11 +231,20 @@
   $: connectionTitle = ($serverConnected && $serverDelay < 5000) ? ($serverDelay < 500 ? 'Streaming live transactions' : 'Unstable connection') : 'Disconnected'
 
   const fxColor = 'good'
+  const priceChartModes = ['none', '1d', '30d']
   let fxLabel = ''
+  let priceChartLabel = ''
   $: {
     const rate = $exchangeRates[$settings.currency]
     if (rate && rate.last)
     fxLabel = formatCurrency($settings.currency, rate.last)
+  }
+  $: priceChartLabel = ($settings.priceChartMode || '30d').toUpperCase()
+
+  function togglePriceChart () {
+    const current = $settings.priceChartMode || '30d'
+    const next = priceChartModes[(priceChartModes.indexOf(current) + 1) % priceChartModes.length]
+    settings.set({ ...$settings, priceChartMode: next })
   }
 
 	const debounce = v => {
@@ -307,6 +317,7 @@
 
   .mempool-height {
     position: absolute;
+    z-index: 2;
     bottom: calc(25% + 10px);
     left: 0;
     right: 0;
@@ -356,6 +367,7 @@
 
   .top-bar {
     position: absolute;
+    z-index: 3;
     top: 0;
     left: 0;
     right: 0;
@@ -379,6 +391,13 @@
 
       .row {
         margin-bottom: 5px;
+      }
+
+      .status-row {
+        display: flex;
+        align-items: center;
+        gap: 0.35rem;
+        height: 0.72rem;
       }
 
       .status-light {
@@ -418,6 +437,15 @@
         color: white;
       }
 
+      .price-chart-mode {
+        color: var(--palette-good);
+        display: inline-flex;
+        align-items: center;
+        font-size: 0.72rem;
+        font-weight: bold;
+        line-height: 1;
+      }
+
       &.tiny {
         width: 100%;
         .row {
@@ -425,6 +453,10 @@
           display: flex;
           flex-direction: row;
           justify-content: space-between;
+        }
+
+        .status-row {
+          justify-content: flex-start;
         }
       }
     }
@@ -445,6 +477,8 @@
   }
 
   .block-area-wrapper {
+    position: relative;
+    z-index: 2;
     height: 100%;
     display: flex;
     flex-direction: column;
@@ -598,6 +632,7 @@
 
 <div class="tx-area" class:light-mode={!$settings.darkMode} class:ambient-mode={$fullscreenActive} style="width: {canvasWidth}; height: {canvasHeight}">
   <div class="canvas-wrapper" on:pointerleave={pointerLeave} on:pointermove={pointerMove} on:click={onClick}>
+    <PriceChartBackground />
     <TxRender controller={txController} />
 
     <div class="mempool-height" style="bottom: calc({$mempoolScreenHeight + 20}px)">
@@ -635,15 +670,18 @@
     <div class="status" class:tiny={$tinyScreen}>
       <div class="row">
         {#if $settings.showFX && fxLabel }
-          <span class="fx-ticker {fxColor}" on:click={() => { $sidebarToggle = 'settings'}}>{ fxLabel }</span>
+          <span class="fx-ticker {fxColor}" on:click={togglePriceChart}>{ fxLabel }</span>
         {/if}
         {#if $tinyScreen && $currentBlock }
           <span class="block-height"><b>Block: </b>{ numberFormat.format($currentBlock.height) }</span>
         {/if}
       </div>
-      <div class="row">
+      <div class="row status-row">
         {#if $settings.showNetworkStatus }
           <div class="status-light {connectionColor}" title={connectionTitle}></div>
+        {/if}
+        {#if $settings.priceChartMode !== 'none' }
+          <span class="price-chart-mode">{ priceChartLabel }</span>
         {/if}
       </div>
     </div>

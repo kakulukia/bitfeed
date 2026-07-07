@@ -12,8 +12,8 @@ function toggle(setting) {
 }
 
 function onChange(setting, value) {
-  $settings[setting] = value
-  analytics.trackEvent('settings', setting, $settings[setting])
+  settings.set({ ...$settings, [setting]: value })
+  analytics.trackEvent('settings', setting, value)
 }
 
 const currencyOptions = Object.keys(currencies).map(code => {
@@ -23,6 +23,12 @@ const currencyOptions = Object.keys(currencies).map(code => {
     tags: [code, currencies[code].name, ...currencies[code].countries]
   }
 })
+
+const priceChartOptions = [
+  { value: 'none', label: 'Off', tags: ['none', 'off'] },
+  { value: '1d', label: '1D', tags: ['day', '24h'] },
+  { value: '30d', label: '30D', tags: ['month', '30 days'] }
+]
 
 let settingConfig = {
   showNetworkStatus: {
@@ -60,6 +66,12 @@ let settingConfig = {
   showSearch: {
     label: 'Search Bar',
     valueType: 'bool'
+  },
+  priceChartMode: {
+    label: 'Price Chart',
+    type: 'dropdown',
+    valueType: 'string',
+    options: priceChartOptions
   }
 }
 $: {

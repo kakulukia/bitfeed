@@ -99,6 +99,7 @@ const defaultSettings = {
 	showNetworkStatus: true,
 	currency: 'USD',
 	showFX: true,
+	priceChartMode: '30d',
 	vbytes: false,
 	colorByFee: true,
 	showGhostTrails: true,
