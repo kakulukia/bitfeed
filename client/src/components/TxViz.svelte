@@ -37,7 +37,6 @@
   let blockFullOpacityUntil = 0
   let blockHover = false
   let blockDisplayOpacity = blockDimOpacity
-  let firstBlockOpacity = true
   let lastReplayBlockTrigger = 0
   let roundedMempoolCount = 0
   let mempoolVbytes = 0
@@ -163,8 +162,7 @@
   function showNewBlockAtFullOpacity (block) {
     if (blockOpacityTimeout) clearTimeout(blockOpacityTimeout)
     blockOpacityBlockId = block.id
-    blockFullOpacityUntil = firstBlockOpacity ? Date.now() + blockFullOpacityMs : block.time + blockFullOpacityMs
-    firstBlockOpacity = false
+    blockFullOpacityUntil = Date.now() + blockFullOpacityMs
 
     if (!blockHover) setBlockOpacity(Date.now() < blockFullOpacityUntil ? 1 : blockDimOpacity, 250)
     if (Date.now() < blockFullOpacityUntil) {
