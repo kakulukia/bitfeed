@@ -6,7 +6,7 @@
   import Icon from '../components/Icon.svelte'
   import closeIcon from '../assets/icon/cil-x-circle.svg'
   import { shortBtcFormat, longBtcFormat, dateFormat, numberFormat } from '../utils/format.js'
-  import { exchangeRates, settings, blocksEnabled, latestBlockHeight, blockTransitionDirection, loading, freezeResize, pageWidth, pageHeight } from '../stores.js'
+  import { exchangeRates, settings, blocksEnabled, latestBlockHeight, blockTransitionDirection, loading, freezeResize, fullscreenActive, pageWidth, pageHeight } from '../stores.js'
   import { formatCurrency } from '../utils/fx.js'
   import { searchBlockHeight } from '../utils/search.js'
 
@@ -340,11 +340,19 @@
     bottom: unset;
     margin-top: 0;
   }
+
+  .block-info-container.ambient-mode {
+    .close-button,
+    .explore-button {
+      opacity: 0;
+      pointer-events: none;
+    }
+  }
 </style>
 
 {#key transitionDirection}
   {#each ((block != null && visible && $blocksEnabled) ? [block] : []) as block (block.id)}
-    <div class="block-info-container" out:fly|local={flyOut} in:fly|local={flyIn}>
+    <div class="block-info-container" class:ambient-mode={$fullscreenActive} out:fly|local={flyOut} in:fly|local={flyIn}>
       <div class="block-info" class:compact={compactView} class:landscape={landscape}>
           <!-- <span class="data-field">Hash: { block.id }</span> -->
           <div class="full-size">

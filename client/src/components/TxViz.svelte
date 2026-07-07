@@ -6,7 +6,7 @@
   import { settings, overlay, serverConnected, serverDelay, txCount, mempoolCount,
            mempoolScreenHeight, blockVisible, tinyScreen,
            compactScreen, currentBlock, latestBlockHeight, selectedTx, blockAreaSize,
-           replayBlockTrigger, devEvents, devSettings, pageWidth, pageHeight, loading, freezeResize } from '../stores.js'
+           replayBlockTrigger, devEvents, devSettings, pageWidth, pageHeight, loading, freezeResize, fullscreenActive } from '../stores.js'
   import BlockInfo from '../components/BlockInfo.svelte'
   import SearchBar from '../components/SearchBar.svelte'
   import TxInfo from '../components/TxInfo.svelte'
@@ -562,12 +562,31 @@
       width: 18em;
     }
   }
+
+  .tx-area.ambient-mode {
+    .top-bar {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .mempool-height {
+      .height-bar {
+        opacity: 0.35;
+      }
+
+      .mempool-count,
+      .mempool-info {
+        font-size: 1rem;
+        text-shadow: 0 0 8px var(--palette-y);
+      }
+    }
+  }
 </style>
 
 <svelte:window on:resize={resize} on:load={resize} on:click={pointerLeave} />
 <!-- <svelte:window on:resize={resize} on:click={pointerMove} /> -->
 
-<div class="tx-area" class:light-mode={!$settings.darkMode} style="width: {canvasWidth}; height: {canvasHeight}">
+<div class="tx-area" class:light-mode={!$settings.darkMode} class:ambient-mode={$fullscreenActive} style="width: {canvasWidth}; height: {canvasHeight}">
   <div class="canvas-wrapper" on:pointerleave={pointerLeave} on:pointermove={pointerMove} on:click={onClick}>
     <TxRender controller={txController} />
 

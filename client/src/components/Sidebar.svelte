@@ -24,11 +24,13 @@ import MempoolLegend from '../components/MempoolLegend.svelte'
 import ContactTab from '../components/ContactTab.svelte'
 import SearchTab from '../components/SearchTab.svelte'
 
-import { sidebarToggle, overlay, currentBlock, latestBlockHeight, blockVisible, replayBlockTrigger, haveSupporters, freezeResize } from '../stores.js'
+import { sidebarToggle, overlay, currentBlock, latestBlockHeight, blockVisible, replayBlockTrigger, haveSupporters, freezeResize, fullscreenActive } from '../stores.js'
 
 let searchTabComponent
 let fullscreen = false
 let fullscreenTarget = null
+let showFullscreenExit = false
+let fullscreenExitTimer
 
 let blockHidden = false
 $: blockHidden = ($currentBlock && !$blockVisible)
@@ -70,6 +72,9 @@ function syncFullscreen () {
 
   fullscreenTarget = null
   fullscreen = actualFullscreen
+  fullscreenActive.set(actualFullscreen)
+  if (actualFullscreen) revealFullscreenExit()
+  else hideFullscreenExit()
 }
 
 async function toggleFullscreen () {
@@ -91,6 +96,19 @@ async function toggleFullscreen () {
     console.warn('fullscreen unavailable', e)
   }
 }
+
+function revealFullscreenExit () {
+  if (!fullscreen) return
+  showFullscreenExit = true
+  if (fullscreenExitTimer) clearTimeout(fullscreenExitTimer)
+  fullscreenExitTimer = setTimeout(hideFullscreenExit, 2400)
+}
+
+function hideFullscreenExit () {
+  showFullscreenExit = false
+  if (fullscreenExitTimer) clearTimeout(fullscreenExitTimer)
+  fullscreenExitTimer = null
+}
 </script>
 
 <style type="text/scss">
@@ -108,10 +126,45 @@ async function toggleFullscreen () {
         display: none;
       }
     }
+
+    &.ambient-mode {
+      opacity: 0;
+      pointer-events: none;
+    }
+  }
+
+  .fullscreen-exit-button {
+    position: fixed;
+    top: 1rem;
+    right: 1rem;
+    z-index: 20;
+    padding: 5px;
+    margin: 0;
+    border: none;
+    border-radius: 5px;
+    background: var(--palette-c);
+    color: var(--palette-x);
+    font-size: 1.5rem;
+    cursor: pointer;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 300ms, background 300ms;
+
+    &.visible {
+      opacity: 0.9;
+      pointer-events: all;
+    }
+
+    &:hover {
+      background: var(--palette-d);
+      opacity: 1;
+    }
   }
 </style>
 
-<div class="sidebar" class:frozen={$freezeResize}>
+<svelte:window on:pointermove={revealFullscreenExit} />
+
+<div class="sidebar" class:frozen={$freezeResize} class:ambient-mode={$fullscreenActive}>
   <!-- displayed in reverse order, to preserve proper z-index layering -->
   {#if blockHidden }
     <SidebarTab  on:click={() => showBlock()} tooltip="Show Latest Block">
@@ -197,3 +250,9 @@ async function toggleFullscreen () {
     </div>
   </SidebarTab>
 </div>
+
+{#if $fullscreenActive}
+  <button class="fullscreen-exit-button" class:visible={showFullscreenExit} on:click={toggleFullscreen} title="Exit Fullscreen" aria-label="Exit Fullscreen">
+    <Icon icon={fullscreenExitIcon} color="var(--bold-a)" />
+  </button>
+{/if}

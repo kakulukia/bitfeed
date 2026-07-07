@@ -144,6 +144,7 @@ export const highlightingFull = writable(false)
 export const pageWidth = writable(window.innerWidth)
 export const pageHeight = writable(window.innerHeight)
 export const freezeResize = writable(false)
+export const fullscreenActive = writable(false)
 
 let lastTinyScreen
 export const tinyScreen = derived([pageWidth, pageHeight, freezeResize], ([$pageWidth, $pageHeight, $freezeResize]) => {
