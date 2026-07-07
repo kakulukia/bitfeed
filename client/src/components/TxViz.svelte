@@ -565,8 +565,18 @@
 
   .tx-area.ambient-mode {
     .top-bar {
-      opacity: 0;
       pointer-events: none;
+
+      .search-bar-wrapper,
+      .alert-bar-wrapper,
+      .block-height,
+      .status .row:not(:first-child) {
+        opacity: 0;
+      }
+
+      .fx-ticker {
+        text-shadow: 0 0 8px var(--palette-y);
+      }
     }
 
     .mempool-height {
