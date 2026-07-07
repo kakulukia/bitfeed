@@ -140,6 +140,8 @@ export const overlay = writable(null)
 
 export const highlight = writable([])
 export const newHighlightQuery = writable(null)
+export const removeHighlightQuery = writable(null)
+export const focusTx = writable(null)
 export const highlightingFull = writable(false)
 
 export const pageWidth = writable(window.innerWidth)

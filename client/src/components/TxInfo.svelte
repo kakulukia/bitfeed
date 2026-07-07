@@ -1,9 +1,8 @@
 <script>
-import Icon from './Icon.svelte'
-import BookmarkIcon from '../assets/icon/cil-bookmark.svg'
-import { longBtcFormat, numberFormat, feeRateFormat } from '../utils/format.js'
-import { exchangeRates, settings, sidebarToggle, newHighlightQuery, highlightingFull } from '../stores.js'
+import { longBtcFormat, numberFormat } from '../utils/format.js'
+import { exchangeRates, settings } from '../stores.js'
 import { formatCurrency } from '../utils/fx.js'
+import { hlToHex } from '../utils/color.js'
 
 export let tx
 export let position
@@ -18,6 +17,7 @@ $: {
 }
 
 let formattedLocalValue
+let tooltipBorderColor = 'transparent'
 
 $: {
   if (tx && tx.value) {
@@ -30,6 +30,8 @@ $: {
     }
   }
 }
+
+$: tooltipBorderColor = tx && tx.highlight && tx.highlightColor ? hlToHex(tx.highlightColor) : 'transparent'
 
 let inputCount
 let outputCount
@@ -46,12 +48,6 @@ function formatBTC (sats) {
   return `₿ ${longBtcFormat.format(sats/100000000)}`
 }
 
-function highlight () {
-  if (!$highlightingFull && tx && tx.id) {
-    $newHighlightQuery = tx.id
-    $sidebarToggle = 'search'
-  }
-}
 </script>
 
 <style type="text/scss">
@@ -66,6 +62,7 @@ function highlight () {
 
     background: var(--palette-d);
     color: var(--palette-x);
+    border-right: 3px solid transparent;
     padding: .5rem;
 
     font-size: 0.8rem;
@@ -98,7 +95,7 @@ function highlight () {
     .inputs {
       display: inline-table;
       table-layout: fixed;
-      width: calc(100% - 40px);
+      width: 100%;
 
       span {
         display: table-cell;
@@ -119,32 +116,10 @@ function highlight () {
         word-break: break-all;
       }
     }
-
-    .icon-button {
-      float: right;
-      font-size: 24px;
-      margin: 0;
-      transition: opacity 300ms, color 300ms, background 300ms;
-      background: var(--palette-c);
-      color: var(--bold-a);
-      cursor: pointer;
-      padding: 5px;
-      border-radius: 5px;
-      &:hover {
-        background: var(--palette-e);
-      }
-      &.disabled {
-        color: var(--palette-e);
-        background: none;
-      }
-    }
   }
 </style>
 
-<div class="tx-info" class:above style="left: {clampedX}px; top: {clampedY}px">
-  <div class="icon-button" class:disabled={$highlightingFull} on:click={highlight} title="Add to watchlist">
-    <Icon icon={BookmarkIcon}/>
-  </div>
+<div class="tx-info" class:above style="left: {clampedX}px; top: {clampedY}px; border-right-color: {tooltipBorderColor}">
   <p class="field hash">
     TxID: { tx.id }
   </p>

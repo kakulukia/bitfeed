@@ -6,7 +6,7 @@ import BitcoinBlock from '../models/BitcoinBlock.js'
 import TxSprite from '../models/TxSprite.js'
 import { FastVertexArray } from '../utils/memory.js'
 import { searchTx, fetchSpends, addSpends } from '../utils/search.js'
-import { overlay, txCount, mempoolCount, mempoolScreenHeight, blockVisible, currentBlock, selectedTx, detailTx, blockAreaSize, highlight, colorMode, settings, blocksEnabled, latestBlockHeight, explorerBlock, blockTransitionDirection, loading, urlPath } from '../stores.js'
+import { overlay, txCount, mempoolCount, mempoolScreenHeight, blockVisible, currentBlock, selectedTx, detailTx, blockAreaSize, highlight, focusTx, colorMode, settings, blocksEnabled, latestBlockHeight, explorerBlock, blockTransitionDirection, loading, urlPath } from '../stores.js'
 import config from "../config.js"
 import { tick } from 'svelte';
 
@@ -50,6 +50,12 @@ export default class TxController {
     highlight.subscribe(criteria => {
       this.highlightCriteria = criteria
       this.applyHighlighting()
+    })
+    focusTx.subscribe(txid => {
+      if (txid) {
+        this.focusTx(txid)
+        focusTx.set(null)
+      }
     })
     colorMode.subscribe(mode => {
       this.setColorMode(mode)
@@ -119,6 +125,10 @@ export default class TxController {
     if (this.explorerBlockScene) {
       this.explorerBlockScene.applyHighlighting(this.highlightCriteria)
     }
+  }
+
+  focusTx (txid) {
+    if (this.txs[txid]) this.txs[txid].focusPulse()
   }
 
   addTx (txData) {

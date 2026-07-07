@@ -3,13 +3,15 @@ import Overlay from '../components/Overlay.svelte'
 import Icon from './Icon.svelte'
 import BookmarkIcon from '../assets/icon/cil-bookmark.svg'
 import { longBtcFormat, numberFormat, feeRateFormat, dateFormat } from '../utils/format.js'
-import { exchangeRates, settings, sidebarToggle, newHighlightQuery, highlightingFull, detailTx, pageWidth, latestBlockHeight, highlightInOut, loading, urlPath, currentBlock, overlay, explorerBlock } from '../stores.js'
+import { exchangeRates, settings, sidebarToggle, newHighlightQuery, removeHighlightQuery, highlightingFull, detailTx, pageWidth, latestBlockHeight, highlightInOut, loading, urlPath, currentBlock, overlay, explorerBlock, highlight as highlightQueries } from '../stores.js'
 import { formatCurrency } from '../utils/fx.js'
 import { hlToHex, mixColor, teal, purple } from '../utils/color.js'
 import { SPKToAddress } from '../utils/encodings.js'
 import api from '../utils/api.js'
 import { searchTx, searchBlockHash, searchBlockHeight, fetchSpends } from '../utils/search.js'
 import { fade } from 'svelte/transition'
+
+const FilledBookmarkIcon = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><path fill="var(--ci-primary-color, currentColor)" d="M88 16h336v480h-35.25L256.008 381.19 123.467 496H88V16Z"/></svg>'
 
 function onClose () {
   $detailTx = null
@@ -21,8 +23,10 @@ function formatBTC (sats) {
   return `₿ ${(sats/100000000).toFixed(8)}`
 }
 
-function addToWatchlist (query) {
-  if (!$highlightingFull && query) {
+function toggleWatchlist (query) {
+  if (bookmarkColor) {
+    $removeHighlightQuery = query
+  } else if (!$highlightingFull && query) {
     $newHighlightQuery = query
     $sidebarToggle = 'search'
   }
@@ -53,6 +57,12 @@ $: {
   if ($detailTx && $detailTx.block && $detailTx.block.height != null && $latestBlockHeight != null) {
     confirmations =  (1 + $latestBlockHeight - $detailTx.block.height)
   }
+}
+
+let bookmarkColor = null
+$: {
+  const matchingQuery = $detailTx && $highlightQueries.find(query => query.txid === $detailTx.id)
+  bookmarkColor = matchingQuery ? matchingQuery.colorHex || hlToHex(matchingQuery.color) : null
 }
 
 const midColor = hlToHex(mixColor(teal, purple, 1, 3, 2))
@@ -352,6 +362,12 @@ async function goToBlock(e) {
         color: var(--palette-e);
         background: none;
       }
+      &.active {
+        color: var(--bookmark-color);
+      }
+      &.active:hover {
+        background: var(--palette-e);
+      }
     }
 
     .confirmation-badge {
@@ -616,8 +632,8 @@ async function goToBlock(e) {
 <Overlay name="tx" on:close={onClose}>
   {#if $detailTx}
     <section class="tx-detail">
-      <div class="icon-button" class:disabled={$highlightingFull} on:click={() => addToWatchlist($detailTx.id)} title="Add transaction to watchlist">
-        <Icon icon={BookmarkIcon}/>
+      <div class="icon-button" class:disabled={$highlightingFull && !bookmarkColor} class:active={bookmarkColor} style="--bookmark-color: {bookmarkColor || 'var(--bold-a)'}" on:click={() => toggleWatchlist($detailTx.id)} title={bookmarkColor ? 'Remove transaction from watchlist' : 'Add transaction to watchlist'}>
+        <Icon icon={bookmarkColor ? FilledBookmarkIcon : BookmarkIcon}/>
       </div>
       {#if $detailTx.block && $latestBlockHeight != null}
         <span class="confirmation-badge">

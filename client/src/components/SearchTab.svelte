@@ -9,7 +9,7 @@ import CrossIcon from '../assets/icon/cil-x.svg'
 import AddressIcon from '../assets/icon/cil-wallet.svg'
 import TxIcon from '../assets/icon/cil-arrow-circle-right.svg'
 import { matchQuery } from '../utils/search.js'
-import { highlight, newHighlightQuery, highlightingFull, freezeResize } from '../stores.js'
+import { highlight, newHighlightQuery, removeHighlightQuery, focusTx, highlightingFull, freezeResize } from '../stores.js'
 import { hlToHex, highlightA, highlightB, highlightC, highlightD, highlightE } from '../utils/color.js'
 
 const highlightColors = [highlightA, highlightB, highlightC, highlightD, highlightE]
@@ -51,6 +51,13 @@ $: {
       query = null
     }
     $newHighlightQuery = null
+  }
+}
+$: {
+  if ($removeHighlightQuery) {
+    const index = watchlist.findIndex(watched => watched.txid === $removeHighlightQuery)
+    if (index >= 0) remove(index)
+    $removeHighlightQuery = null
   }
 }
 $: {
@@ -148,6 +155,10 @@ function searchSubmit (e) {
   if (document.activeElement) document.activeElement.blur()
   add()
   return false
+}
+
+function focusWatched (watched) {
+  if (watched && watched.txid) $focusTx = watched.txid
 }
 
 let freezeTimeout
@@ -249,6 +260,10 @@ async function focusOut(e) {
         border-color: var(--palette-e);
       }
     }
+
+    .watched.focusable {
+      cursor: pointer;
+    }
   }
 </style>
 
@@ -270,6 +285,8 @@ async function focusOut(e) {
     {#each watchlist as watched, index (watched.colorIndex)}
       <div
         class="watched"
+        class:focusable={watched.txid}
+        on:click|preventDefault|stopPropagation={() => focusWatched(watched)}
 				transition:fade={{ duration: 200 }}
 				animate:flip={{ duration: 200 }}
       >
@@ -277,7 +294,7 @@ async function focusOut(e) {
           <Icon icon={queryIcons[watched.query]} />
         </div>
         <span class="query" style="color: {watched.colorHex};">{ watched.value }</span>
-        <div class="input-icon remove-query icon-button" on:click={() => remove(index)} title="Remove from watchlist">
+        <div class="input-icon remove-query icon-button" on:click|preventDefault|stopPropagation={() => remove(index)} title="Remove from watchlist">
           <Icon icon={CrossIcon} />
         </div>
       </div>

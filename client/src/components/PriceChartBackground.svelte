@@ -1,9 +1,11 @@
 <script>
+import { onMount } from 'svelte'
 import { settings } from '../stores.js'
 
 const chartWidth = 1000
 const chartHeight = 320
 const padding = 20
+const refreshMs = 5 * 60 * 1000
 
 let loadedKey = null
 let points = []
@@ -16,9 +18,17 @@ $: loadKey = `${currency}:${mode}`
 $: if (mode !== 'none' && loadedKey !== loadKey) loadPrices(currency, mode, loadKey)
 $: updateChart(points)
 
+onMount(() => {
+  const timer = setInterval(() => {
+    if (mode !== 'none') loadPrices(currency, mode, loadKey)
+  }, refreshMs)
+  return () => clearInterval(timer)
+})
+
 async function loadPrices (targetCurrency, targetMode, targetKey) {
+  const keyChanged = loadedKey !== targetKey
   loadedKey = targetKey
-  points = []
+  if (keyChanged) points = []
 
   try {
     const params = new URLSearchParams({

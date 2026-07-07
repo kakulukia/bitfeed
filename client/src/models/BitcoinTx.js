@@ -157,16 +157,40 @@ export default class BitcoinTx {
   highlightOn (color = pink) {
     if (this.view) this.view.setHighlight(true, color)
     this.highlight = true
+    this.highlightColor = color
   }
 
   highlightOff () {
     if (this.view) this.view.setHighlight(false)
     this.highlight = false
+    this.highlightColor = null
+  }
+
+  focusPulse () {
+    const radius = this.screenPosition && this.screenPosition.r
+    if (!this.view || !this.view.initialised || !radius) return false
+    const pulseRadius = Math.min(Math.max(radius * 2.3, radius + 8), radius + 32)
+    this.view.update({
+      display: {
+        position: {
+          r: pulseRadius
+        },
+        color: {
+          alpha: 1
+        }
+      },
+      duration: 750,
+      delay: 0,
+      smooth: true,
+      boomerang: true
+    })
+    return true
   }
 
   applyHighlighting (criteria) {
     let color
     this.highlight = false
+    this.highlightColor = null
     criteria.forEach(criterion => {
       if (criterion.txid === this.id) {
         this.highlight = true
@@ -180,6 +204,7 @@ export default class BitcoinTx {
         })
       }
     })
+    if (this.highlight) this.highlightColor = color || pink
     this.view.setHighlight(this.highlight, color || pink)
   }
 
