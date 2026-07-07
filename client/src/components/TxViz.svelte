@@ -6,7 +6,7 @@
   import { settings, overlay, serverConnected, serverDelay, txCount, mempoolCount,
            mempoolScreenHeight, blockVisible, tinyScreen,
            compactScreen, currentBlock, latestBlockHeight, selectedTx, blockAreaSize,
-           devEvents, devSettings, pageWidth, pageHeight, loading, freezeResize } from '../stores.js'
+           replayBlockTrigger, devEvents, devSettings, pageWidth, pageHeight, loading, freezeResize } from '../stores.js'
   import BlockInfo from '../components/BlockInfo.svelte'
   import SearchBar from '../components/SearchBar.svelte'
   import TxInfo from '../components/TxInfo.svelte'
@@ -38,6 +38,7 @@
   let blockHover = false
   let blockDisplayOpacity = blockDimOpacity
   let firstBlockOpacity = true
+  let lastReplayBlockTrigger = 0
 
   let txStream
   if (!config.noTxFeed || !config.noBlockFeed) txStream = getTxStream()
@@ -53,6 +54,13 @@
   $: {
     if (txController && $currentBlock && $currentBlock.id !== blockOpacityBlockId) {
       showNewBlockAtFullOpacity($currentBlock)
+    }
+  }
+
+  $: {
+    if (txController && $replayBlockTrigger > lastReplayBlockTrigger) {
+      lastReplayBlockTrigger = $replayBlockTrigger
+      replayBlock()
     }
   }
 
@@ -569,7 +577,7 @@
       <div class="spacer" style="flex: {$pageWidth <= 640 ? '1.5' : '1'}"></div>
       <div class="block-area-outer" style="width: {$blockAreaSize}px; height: {$blockAreaSize}px; --block-control-opacity: {blockDisplayOpacity}" on:pointerenter={focusBlock} on:pointerleave={dimBlock}>
         <div class="block-area">
-          <BlockInfo block={$currentBlock} visible={$blockVisible && !$tinyScreen} on:hideBlock={hideBlock} on:quitExploring={quitExploring} on:replayBlock={replayBlock} />
+          <BlockInfo block={$currentBlock} visible={$blockVisible && !$tinyScreen} on:hideBlock={hideBlock} on:quitExploring={quitExploring} />
         </div>
         {#if config.dev && config.debug && $devSettings.guides }
           <div class="guide-area" />

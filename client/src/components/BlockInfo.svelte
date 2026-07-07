@@ -5,7 +5,6 @@
   import { createEventDispatcher } from 'svelte'
   import Icon from '../components/Icon.svelte'
   import closeIcon from '../assets/icon/cil-x-circle.svg'
-  import replayIcon from '../assets/icon/cil-reload.svg'
   import { shortBtcFormat, longBtcFormat, dateFormat, numberFormat } from '../utils/format.js'
   import { exchangeRates, settings, blocksEnabled, latestBlockHeight, blockTransitionDirection, loading, freezeResize, pageWidth, pageHeight } from '../stores.js'
   import { formatCurrency } from '../utils/fx.js'
@@ -131,13 +130,6 @@
     }
   }
 
-  function replayBlock () {
-    if (block && block.height == $latestBlockHeight) {
-      analytics.trackEvent('viz', 'block', 'replay')
-      dispatch('replayBlock')
-    }
-  }
-
   async function explorePrevBlock (e) {
     e.preventDefault()
     if (!$loading && block) {
@@ -162,8 +154,7 @@
 </script>
 
 <style type="text/scss">
-  .close-button,
-  .replay-button {
+  .close-button {
     width: 1em;
     height: 1em;
     background: none;
@@ -182,13 +173,6 @@
     &.standalone {
       display: none;
     }
-  }
-
-  .data-actions {
-    display: flex;
-    gap: .35em;
-    align-items: center;
-    margin-left: 5px;
   }
 
   .block-info-container {
@@ -240,6 +224,20 @@
 
     .data-field {
       white-space: nowrap;
+
+      &.close-button {
+        width: 1em;
+        height: 1em;
+        background: none;
+        border: none;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        margin: 0;
+        padding: 0;
+        cursor: pointer;
+        margin-top: -5px;
+      }
 
        &:first-child {
          margin-right: 5px;
@@ -324,10 +322,10 @@
       &.title-field {
         margin-bottom: .5em;
       }
-    }
 
-    .data-actions {
-      display: none;
+      &.close-button {
+        display: none;
+      }
     }
   }
   .standalone.landscape.close-button {
@@ -337,21 +335,8 @@
     left: 100%;
     margin: 5px;
   }
-  .standalone.landscape.replay-button {
-    display: block;
-    position: absolute;
-    bottom: 100%;
-    left: calc(100% + 1.4em);
-    margin: 5px;
-  }
-
   .standalone.tinyscreen.close-button {
     top: 0;
-    bottom: unset;
-    margin-top: 0;
-  }
-  .standalone.tinyscreen.replay-button {
-    top: 1.4em;
     bottom: unset;
     margin-top: 0;
   }
@@ -365,12 +350,7 @@
           <div class="full-size">
             <div class="data-row">
               <span class="data-field title-field" title="{block.miner_sig}"><b>{#if block.height == $latestBlockHeight}Latest {/if}Block: </b>{ numberFormat.format(block.height) }</span>
-              <span class="data-actions">
-                {#if block.height == $latestBlockHeight}
-                  <button class="replay-button" on:click={replayBlock} title="Replay block animation"><Icon icon={replayIcon} color="var(--palette-x)" /></button>
-                {/if}
-                <button class="close-button" on:click={hideBlock} title="Hide block"><Icon icon={closeIcon} color="var(--palette-x)" /></button>
-              </span>
+              <button class="data-field close-button" on:click={hideBlock} title="Hide block"><Icon icon={closeIcon} color="var(--palette-x)" /></button>
             </div>
             <div class="data-row">
               <span class="data-field" title="block timestamp">{ formatDateTime(block.time) }</span>
@@ -393,12 +373,7 @@
           <div class="compact">
             <div class="data-row">
               <span class="data-field title-field" title="{block.miner_sig}"><b>{#if block.height == $latestBlockHeight}Latest {/if}Block: </b>{ numberFormat.format(block.height) }</span>
-              <span class="data-actions">
-                {#if block.height == $latestBlockHeight}
-                  <button class="replay-button" on:click={replayBlock} title="Replay block animation"><Icon icon={replayIcon} color="var(--palette-x)" /></button>
-                {/if}
-                <button class="close-button" on:click={hideBlock} title="Hide block"><Icon icon={closeIcon} color="var(--palette-x)" /></button>
-              </span>
+              <button class="data-field close-button" on:click={hideBlock} title="Hide block"><Icon icon={closeIcon} color="var(--palette-x)" /></button>
             </div>
             <div class="data-row">
               <span class="data-field">{ formatDateTime(block.time) }</span>
@@ -432,11 +407,6 @@
       <button class="close-button standalone" class:landscape={landscape} class:tinyscreen={tinyView} on:click={hideBlock}>
         <Icon icon={closeIcon} color="var(--palette-x)" />
       </button>
-      {#if block.height == $latestBlockHeight}
-        <button class="replay-button standalone" class:landscape={landscape} class:tinyscreen={tinyView} on:click={replayBlock} title="Replay block animation">
-          <Icon icon={replayIcon} color="var(--palette-x)" />
-        </button>
-      {/if}
     </div>
   {/each}
 {/key}

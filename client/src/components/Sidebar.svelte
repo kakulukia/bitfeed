@@ -19,11 +19,12 @@ import giftIcon from '../assets/icon/cil-gift.svg'
 import bookmarkIcon from '../assets/icon/cil-bookmark.svg'
 import fullscreenIcon from '../assets/icon/cil-fullscreen.svg'
 import fullscreenExitIcon from '../assets/icon/cil-fullscreen-exit.svg'
+import replayIcon from '../assets/icon/cil-reload.svg'
 import MempoolLegend from '../components/MempoolLegend.svelte'
 import ContactTab from '../components/ContactTab.svelte'
 import SearchTab from '../components/SearchTab.svelte'
 
-import { sidebarToggle, overlay, currentBlock, blockVisible, haveSupporters, freezeResize } from '../stores.js'
+import { sidebarToggle, overlay, currentBlock, latestBlockHeight, blockVisible, replayBlockTrigger, haveSupporters, freezeResize } from '../stores.js'
 
 let searchTabComponent
 let fullscreen = false
@@ -31,6 +32,7 @@ let fullscreenTarget = null
 
 let blockHidden = false
 $: blockHidden = ($currentBlock && !$blockVisible)
+$: canReplayBlock = ($currentBlock && $currentBlock.height == $latestBlockHeight)
 
 onMount(() => {
   syncFullscreen()
@@ -55,6 +57,11 @@ function openOverlay (key) {
 function showBlock () {
   analytics.trackEvent('viz', 'block', 'show')
   $blockVisible = true
+}
+
+function replayBlock () {
+  analytics.trackEvent('viz', 'block', 'replay')
+  replayBlockTrigger.increment()
 }
 
 function syncFullscreen () {
@@ -174,6 +181,13 @@ async function toggleFullscreen () {
       <Icon icon={fullscreen ? fullscreenExitIcon : fullscreenIcon} color="var(--bold-a)" />
     </span>
   </SidebarTab>
+  {#if canReplayBlock}
+    <SidebarTab on:click={replayBlock} tooltip="Replay Latest Block">
+      <span slot="tab" title="Replay Latest Block">
+        <Icon icon={replayIcon} color="var(--bold-a)" />
+      </span>
+    </SidebarTab>
+  {/if}
   <SidebarTab open={$sidebarToggle === 'settings'} on:click={() => {settings('settings')}} tooltip="Settings">
     <span slot="tab" title="Settings">
       <Icon icon={cogIcon} color="var(--bold-a)" />

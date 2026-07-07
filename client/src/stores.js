@@ -83,6 +83,7 @@ export const devEvents = writable({
 
 export const txCount = createCounter()
 export const lastBlockId = writable(null)
+export const replayBlockTrigger = createCounter()
 export const mempoolCount = tweened(0)
 export const mempoolScreenHeight = writable(0)
 export const blockVisible = writable(false)
