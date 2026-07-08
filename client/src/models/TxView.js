@@ -3,8 +3,8 @@ import TxSprite from './TxSprite.js'
 const highlightTransitionTime = 300
 const hoverGrowTransitionTime = 50
 const hoverShrinkTransitionTime = 1000
-const glowPadding = 2.25
-const glowAlpha = 0.55
+const lensHaloPadding = 2.25
+const lensHaloAlpha = 0.55
 
 // converts from this class's update format to TxSprite's update format
 // now, id, value, position, size, color, alpha, duration, adjust
@@ -34,7 +34,7 @@ export default class TxView {
     this.hover = false
     this.highlight = false
     this.lensSprite = null
-    this.lensGlowSprite = null
+    this.lensHaloSprite = null
     this.lensDestroyTimer = null
     this.lensBaseRadius = 0
     this.lensBoost = 0
@@ -91,9 +91,6 @@ export default class TxView {
   setHover (hoverOn, color, lens = null) {
     if (hoverOn) {
       this.hover = true
-      if (this.sprite) {
-        this.sprite.bringToFront()
-      }
       this.showLens(lens)
     } else {
       this.hover = false
@@ -128,8 +125,7 @@ export default class TxView {
           })
         }
       }
-      if (this.lensGlowSprite) this.lensGlowSprite.bringToFront()
-      if (this.lensSprite) this.lensSprite.bringToFront()
+      this.bringLensToFront()
     } else {
       this.highlight = false
       this.highlightColor = null
@@ -153,8 +149,8 @@ export default class TxView {
     if (this.lensDestroyTimer) clearTimeout(this.lensDestroyTimer)
     this.lensDestroyTimer = null
 
-    if (!this.lensGlowSprite) {
-      this.lensGlowSprite = new TxSprite({
+    if (!this.lensHaloSprite) {
+      this.lensHaloSprite = new TxSprite({
         x: lens.x,
         y: lens.y,
         r: lens.baseR,
@@ -175,16 +171,15 @@ export default class TxView {
       }, this.vertexArray, false)
     }
 
-    this.lensGlowSprite.bringToFront()
-    this.lensSprite.bringToFront()
+    this.bringLensToFront()
 
-    this.lensGlowSprite.update({
+    this.lensHaloSprite.update({
       x: lens.x,
       y: lens.y,
-      r: lens.r + glowPadding,
+      r: lens.r + lensHaloPadding,
       h: 0,
       l: 0,
-      alpha: glowAlpha,
+      alpha: lensHaloAlpha,
       duration: hoverGrowTransitionTime,
       adjust: false,
       smooth: true
@@ -204,7 +199,7 @@ export default class TxView {
   }
 
   updateLensPosition (position, duration, delay, start, adjust, smooth) {
-    if ((!this.lensSprite && !this.lensGlowSprite) || !position) return
+    if ((!this.lensSprite && !this.lensHaloSprite) || !position) return
 
     const update = {}
     if (position.x != null) update.x = position.x
@@ -212,11 +207,11 @@ export default class TxView {
     if (position.r != null) update.r = position.r + this.lensBoost
     if (!Object.keys(update).length) return
 
-    const glowUpdate = { ...update }
-    if (glowUpdate.r != null) glowUpdate.r += glowPadding
+    const haloUpdate = { ...update }
+    if (haloUpdate.r != null) haloUpdate.r += lensHaloPadding
 
-    if (this.lensGlowSprite) this.lensGlowSprite.update({
-      ...glowUpdate,
+    if (this.lensHaloSprite) this.lensHaloSprite.update({
+      ...haloUpdate,
       start,
       duration,
       delay,
@@ -232,21 +227,35 @@ export default class TxView {
       adjust,
       smooth
     })
+    if (this.hover) this.bringLensToFront()
+  }
+
+  refreshHover () {
+    if (this.hover) this.bringLensToFront()
+  }
+
+  bringLensToFront () {
+    if (this.vertexArray && this.vertexArray.moveGroupToFront && this.lensHaloSprite && this.lensSprite) {
+      this.vertexArray.moveGroupToFront([this.lensHaloSprite, this.lensSprite])
+    } else {
+      if (this.lensHaloSprite) this.lensHaloSprite.bringToFront()
+      if (this.lensSprite) this.lensSprite.bringToFront()
+    }
   }
 
   destroyLens (duration = 0) {
     if (this.lensDestroyTimer) clearTimeout(this.lensDestroyTimer)
     this.lensDestroyTimer = null
-    if (!this.lensSprite && !this.lensGlowSprite) return
+    if (!this.lensSprite && !this.lensHaloSprite) return
 
     const sprite = this.lensSprite
-    const glowSprite = this.lensGlowSprite
+    const haloSprite = this.lensHaloSprite
     if (duration > 0) {
       const growDelay = Math.max(0, hoverGrowTransitionTime - (performance.now() - this.lensGrowStartedAt))
       if (growDelay > 0) {
         this.lensDestroyTimer = setTimeout(() => {
           this.lensDestroyTimer = null
-          if (!this.hover && this.lensSprite === sprite && this.lensGlowSprite === glowSprite) {
+          if (!this.hover && this.lensSprite === sprite && this.lensHaloSprite === haloSprite) {
             this.destroyLens(duration)
           }
         }, growDelay)
@@ -259,8 +268,8 @@ export default class TxView {
         adjust: false,
         smooth: true
       })
-      if (glowSprite) glowSprite.update({
-        r: this.lensBaseRadius + glowPadding,
+      if (haloSprite) haloSprite.update({
+        r: this.lensBaseRadius + lensHaloPadding,
         alpha: 0,
         duration,
         adjust: false,
@@ -268,15 +277,15 @@ export default class TxView {
       })
       this.lensDestroyTimer = setTimeout(() => {
         if (this.lensSprite === sprite) this.lensSprite = null
-        if (this.lensGlowSprite === glowSprite) this.lensGlowSprite = null
+        if (this.lensHaloSprite === haloSprite) this.lensHaloSprite = null
         if (sprite) sprite.destroy()
-        if (glowSprite) glowSprite.destroy()
+        if (haloSprite) haloSprite.destroy()
       }, duration + 50)
     } else {
       this.lensSprite = null
-      this.lensGlowSprite = null
+      this.lensHaloSprite = null
       if (sprite) sprite.destroy()
-      if (glowSprite) glowSprite.destroy()
+      if (haloSprite) haloSprite.destroy()
     }
   }
 }

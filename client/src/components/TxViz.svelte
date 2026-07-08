@@ -19,7 +19,7 @@
   import LoadingAnimation from '../components/util/LoadingAnimation.svelte'
   import Alerts from '../components/alert/Alerts.svelte'
   import { formatMempoolBlockEstimate, numberFormat } from '../utils/format.js'
-  import { exchangeRates, lastBlockId, haveSupporters } from '../stores.js'
+  import { exchangeRates, lastBlockId, haveSupporters, priceChartChange } from '../stores.js'
   import { formatCurrency } from '../utils/fx.js'
   import { fade } from 'svelte/transition'
   import config from '../config.js'
@@ -257,13 +257,25 @@
   const priceChartModes = ['none', '1d', '30d']
   let fxLabel = ''
   let priceChartLabel = ''
+  let priceChartTrend = 'good'
   let priceChartFocused = false
   $: {
     const rate = $exchangeRates[$settings.currency]
     if (rate && rate.last)
     fxLabel = formatCurrency($settings.currency, rate.last)
   }
-  $: priceChartLabel = ($settings.priceChartMode || '30d').toUpperCase()
+  $: {
+    const chartMode = $settings.priceChartMode || '30d'
+    const chartCurrency = ($settings.currency || 'USD').toLowerCase()
+    priceChartLabel = chartMode.toUpperCase()
+    priceChartTrend = 'good'
+    if ($priceChartChange && $priceChartChange.mode === chartMode && $priceChartChange.currency === chartCurrency) {
+      const percent = $priceChartChange.percent
+      const sign = percent > 0 ? '+' : ''
+      priceChartLabel = `${priceChartLabel} ${sign}${percent}%`
+      priceChartTrend = $priceChartChange.trend
+    }
+  }
 
   function togglePriceChart () {
     const current = $settings.priceChartMode || '30d'
@@ -507,6 +519,14 @@
         font-size: 0.72rem;
         font-weight: bold;
         line-height: 1;
+
+        &.bad {
+          color: var(--palette-bad);
+        }
+
+        &.good {
+          color: var(--palette-good);
+        }
       }
 
       &.tiny {
@@ -818,8 +838,8 @@
         {#if $settings.showNetworkStatus }
           <div class="status-light {connectionColor}" title={connectionTitle}></div>
         {/if}
-        {#if $settings.priceChartMode !== 'none' }
-          <span class="price-chart-mode">{ priceChartLabel }</span>
+        {#if $settings.priceChartMode !== 'none' && priceChartFocused }
+          <span class="price-chart-mode {priceChartTrend}">{ priceChartLabel }</span>
         {/if}
       </div>
     </div>

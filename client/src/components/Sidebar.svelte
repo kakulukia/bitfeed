@@ -31,18 +31,27 @@ let fullscreen = false
 let fullscreenTarget = null
 let showFullscreenExit = false
 let fullscreenExitTimer
+let sidebarIdleHidden = false
+let sidebarIdleTimer
+const sidebarIdleMs = 21000
 
 let blockHidden = false
 $: blockHidden = ($currentBlock && !$blockVisible)
 $: canReplayBlock = ($currentBlock && $currentBlock.height == $latestBlockHeight)
+$: if ($sidebarToggle) sidebarIdleHidden = false
 
 onMount(() => {
   syncFullscreen()
+  scheduleSidebarIdleHide()
   document.addEventListener('fullscreenchange', syncFullscreen)
-  return () => document.removeEventListener('fullscreenchange', syncFullscreen)
+  return () => {
+    document.removeEventListener('fullscreenchange', syncFullscreen)
+    if (sidebarIdleTimer) clearTimeout(sidebarIdleTimer)
+  }
 })
 
 function settings (tab) {
+  recordActivity()
   if ($sidebarToggle) analytics.trackEvent('sidebar', $sidebarToggle, 'close')
   if ($sidebarToggle === tab) {
     sidebarToggle.set(null)
@@ -53,15 +62,18 @@ function settings (tab) {
 }
 
 function openOverlay (key) {
+  recordActivity()
   $overlay = key
 }
 
 function showBlock () {
+  recordActivity()
   analytics.trackEvent('viz', 'block', 'show')
   $blockVisible = true
 }
 
 function replayBlock () {
+  recordActivity()
   analytics.trackEvent('viz', 'block', 'replay')
   replayBlockTrigger.increment()
 }
@@ -109,6 +121,19 @@ function hideFullscreenExit () {
   if (fullscreenExitTimer) clearTimeout(fullscreenExitTimer)
   fullscreenExitTimer = null
 }
+
+function recordActivity () {
+  sidebarIdleHidden = false
+  revealFullscreenExit()
+  scheduleSidebarIdleHide()
+}
+
+function scheduleSidebarIdleHide () {
+  if (sidebarIdleTimer) clearTimeout(sidebarIdleTimer)
+  sidebarIdleTimer = setTimeout(() => {
+    if (!$sidebarToggle && !$fullscreenActive) sidebarIdleHidden = true
+  }, sidebarIdleMs)
+}
 </script>
 
 <style type="text/scss">
@@ -131,6 +156,14 @@ function hideFullscreenExit () {
       opacity: 0;
       pointer-events: none;
     }
+
+    &.idle-hidden {
+      opacity: 0;
+      pointer-events: none;
+      transform: translateX(3rem);
+    }
+
+    transition: opacity 350ms, transform 450ms;
   }
 
   .fullscreen-exit-button {
@@ -162,10 +195,17 @@ function hideFullscreenExit () {
   }
 </style>
 
-<svelte:window on:pointermove={revealFullscreenExit} />
+<svelte:window on:pointermove={recordActivity} on:pointerdown={recordActivity} on:keydown={recordActivity} />
 
-<div class="sidebar" class:frozen={$freezeResize} class:ambient-mode={$fullscreenActive}>
+<div class="sidebar" class:frozen={$freezeResize} class:ambient-mode={$fullscreenActive} class:idle-hidden={sidebarIdleHidden}>
   <!-- displayed in reverse order, to preserve proper z-index layering -->
+  {#if canReplayBlock}
+    <SidebarTab on:click={replayBlock} tooltip="Replay Latest Block">
+      <span slot="tab" title="Replay Latest Block">
+        <Icon icon={replayIcon} color="var(--bold-a)" />
+      </span>
+    </SidebarTab>
+  {/if}
   {#if blockHidden }
     <SidebarTab  on:click={() => showBlock()} tooltip="Show Latest Block">
       <span slot="tab">
@@ -234,13 +274,6 @@ function hideFullscreenExit () {
       <Icon icon={fullscreen ? fullscreenExitIcon : fullscreenIcon} color="var(--bold-a)" />
     </span>
   </SidebarTab>
-  {#if canReplayBlock}
-    <SidebarTab on:click={replayBlock} tooltip="Replay Latest Block">
-      <span slot="tab" title="Replay Latest Block">
-        <Icon icon={replayIcon} color="var(--bold-a)" />
-      </span>
-    </SidebarTab>
-  {/if}
   <SidebarTab open={$sidebarToggle === 'settings'} on:click={() => {settings('settings')}} tooltip="Settings">
     <span slot="tab" title="Settings">
       <Icon icon={cogIcon} color="var(--bold-a)" />

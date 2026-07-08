@@ -52,6 +52,7 @@ function createCachedDict (namespace, setValues, defaultValues) {
 
 // refresh exchange rates every minute
 export const exchangeRates = makePollStore('rates', 'https://blockchain.info/ticker', 60000, {})
+export const priceChartChange = writable(null)
 // refresh messages from donation server every hour
 export const alerts =  config.messagesEnabled ? makePollStore('alerts', `${config.donationRoot}/api/sponsorship/msgs.json`, 3600000, []) : writable(null)
 // refresh sponsor data every 10 minutes

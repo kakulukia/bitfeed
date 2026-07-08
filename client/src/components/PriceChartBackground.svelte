@@ -1,6 +1,6 @@
 <script>
 import { onMount } from 'svelte'
-import { settings } from '../stores.js'
+import { priceChartChange, settings } from '../stores.js'
 
 export let focused = false
 
@@ -57,10 +57,20 @@ function updateChart (data) {
   if (data.length < 2) {
     path = ''
     chartTrend = 'good'
+    $priceChartChange = null
     return
   }
 
-  chartTrend = data[data.length - 1].price >= data[0].price ? 'good' : 'bad'
+  const firstPrice = data[0].price
+  const lastPrice = data[data.length - 1].price
+  const percent = ((lastPrice - firstPrice) / firstPrice) * 100
+  chartTrend = lastPrice >= firstPrice ? 'good' : 'bad'
+  $priceChartChange = {
+    currency,
+    mode,
+    percent: Math.round(percent),
+    trend: chartTrend
+  }
 
   const prices = data.map(point => point.price)
   const min = Math.min(...prices)

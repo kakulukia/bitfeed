@@ -431,6 +431,8 @@ export default class TxController {
       if (selected !== this.selectedTx) {
         if (this.selectedTx) this.selectedTx.hoverOff()
         if (selected) selected.hoverOn()
+      } else if (selected) {
+        selected.hoverRefresh()
       }
       this.selectedTx = selected
       selectedTx.set(this.selectedTx)
@@ -448,6 +450,8 @@ export default class TxController {
         sameTx = false
         if (this.selectedTx) this.selectedTx.hoverOff()
         if (selected) selected.hoverOn()
+      } else if (selected) {
+        selected.hoverRefresh()
       }
       this.selectedTx = selected
       selectedTx.set(selected)

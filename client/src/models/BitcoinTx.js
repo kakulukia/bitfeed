@@ -154,11 +154,15 @@ export default class BitcoinTx {
     if (this.view) this.view.setHover(false)
   }
 
+  hoverRefresh () {
+    if (this.view) this.view.refreshHover()
+  }
+
   hoverLens () {
     const radius = this.screenPosition && this.screenPosition.r
     if (!radius) return null
     const sizeLevel = this.gridPosition && this.gridPosition.r
-    const scale = sizeLevel && sizeLevel <= 2 ? 3 : (4 / 3)
+    const scale = sizeLevel <= 1 ? 3 : Math.max(1.2, 1 + 1.6 / sizeLevel)
     return {
       x: this.screenPosition.x,
       y: this.screenPosition.y,

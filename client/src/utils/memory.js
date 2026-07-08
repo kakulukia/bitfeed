@@ -86,6 +86,46 @@ export class FastVertexArray {
     return target
   }
 
+  moveGroupToFront (sprites) {
+    const group = sprites.filter(sprite => (
+      sprite &&
+      sprite.vertexPointer != null &&
+      this.sprites[sprite.vertexPointer] === sprite
+    ))
+    if (!group.length) return null
+
+    const groupSet = new Set(group)
+    const targetSlots = []
+    for (let index = this.lastSlot - 1; index >= 0 && targetSlots.length < group.length; index--) {
+      if (this.sprites[index]) targetSlots.unshift(index)
+    }
+
+    const targetSet = new Set(targetSlots)
+    const sourceSlots = group.map(sprite => sprite.vertexPointer)
+    const displaced = targetSlots
+      .map(slot => this.sprites[slot])
+      .filter(sprite => sprite && !groupSet.has(sprite))
+    const vacatedSlots = sourceSlots.filter(slot => !targetSet.has(slot))
+    if (displaced.length !== vacatedSlots.length) return null
+
+    const moves = [
+      ...displaced.map((sprite, index) => [sprite, vacatedSlots[index]]),
+      ...group.map((sprite, index) => [sprite, targetSlots[index]])
+    ]
+
+    moves.forEach(([sprite, slot]) => {
+      this.sprites[slot] = sprite
+    })
+    moves.forEach(([sprite, slot]) => {
+      if (sprite.vertexPointer !== slot) {
+        sprite.moveVertexPointer(slot)
+        sprite.compile()
+      }
+    })
+
+    return targetSlots[targetSlots.length - 1]
+  }
+
   getData (index) {
     return this.data.subarray(index, this.stride)
   }
