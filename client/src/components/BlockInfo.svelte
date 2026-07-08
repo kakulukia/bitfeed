@@ -194,7 +194,7 @@
     pointer-events: all;
     font-size: 1.2em;
     opacity: var(--block-control-opacity, 1);
-    transition: opacity 250ms;
+    transition: opacity 250ms, top 1000ms, bottom 1000ms, left 1000ms, right 1000ms, margin 1000ms, transform 1000ms;
 
     &.standalone {
       display: none;
@@ -219,6 +219,7 @@
 
     color: var(--palette-x);
     font-size: 1rem;
+    transition: top 1000ms, bottom 1000ms, left 1000ms, right 1000ms, transform 1000ms;
 
     @media (max-width: 360px) {
       font-size: 4.4vw;
@@ -280,7 +281,7 @@
     padding: .5em;
     pointer-events: all;
     opacity: var(--block-control-opacity, 1);
-    transition: opacity 250ms;
+    transition: opacity 250ms, bottom 1000ms, left 1000ms, right 1000ms;
 
     &.prev {
       right: calc(100% + .7rem);
