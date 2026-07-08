@@ -211,7 +211,7 @@
 
   .block-info {
     position: absolute;
-    bottom: calc(100% + 0.25rem);
+    bottom: calc(100% + 1.15rem);
     left: 50%;
     min-width: 100%;
     transform: translateX(-50%);
@@ -262,7 +262,7 @@
         margin: 0;
         padding: 0;
         cursor: pointer;
-        margin-top: -5px;
+        transform: translateY(-.7rem);
       }
 
        &:first-child {
@@ -277,16 +277,16 @@
   .explore-button {
     position: absolute;
     bottom: 10%;
-    padding: .75em;
+    padding: .5em;
     pointer-events: all;
     opacity: var(--block-control-opacity, 1);
     transition: opacity 250ms;
 
     &.prev {
-      right: 100%
+      right: calc(100% + .7rem);
     }
     &.next {
-      left: 100%;
+      left: calc(100% + .7rem);
     }
 
     .chevron {
@@ -321,9 +321,9 @@
   .block-info.landscape {
     bottom: unset;
     left: unset;
-    top: 0;
-    right: 100%;
-    padding-right: .5rem;
+    top: -4px;
+    right: calc(100% + 1.2rem);
+    padding-right: 0;
 
     min-width: 13rem;
     text-align: right;
@@ -357,9 +357,10 @@
   .standalone.landscape.close-button {
     display: block;
     position: absolute;
-    bottom: 100%;
-    left: 100%;
-    margin: 5px;
+    top: -2px;
+    bottom: unset;
+    left: calc(100% + 1.15rem);
+    margin: 0;
   }
   .standalone.tinyscreen.close-button {
     top: 0;

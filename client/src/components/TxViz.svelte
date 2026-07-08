@@ -32,10 +32,15 @@
 
   let lastFrameUpdate = 0
   const blockFullOpacityMs = 21000
+  const blockFreshStartDelayMs = 6900
+  const blockFreshDurationMs = (blockFullOpacityMs - blockFreshStartDelayMs) / 3
   const blockDimOpacity = 0.21
   let blockOpacityTimeout
+  let blockFreshTimeout
+  let blockFreshEndTimeout
   let blockOpacityBlockId
   let blockFullOpacityUntil = 0
+  let blockFresh = false
   let blockHover = false
   let blockDisplayOpacity = blockDimOpacity
   let lastReplayBlockTrigger = 0
@@ -164,6 +169,7 @@
     if (blockOpacityTimeout) clearTimeout(blockOpacityTimeout)
     blockOpacityBlockId = block.id
     blockFullOpacityUntil = Date.now() + blockFullOpacityMs
+    scheduleFreshBlockAura(block)
 
     if (!blockHover) setBlockOpacity(Date.now() < blockFullOpacityUntil ? 1 : blockDimOpacity, 250)
     if (Date.now() < blockFullOpacityUntil) {
@@ -171,8 +177,24 @@
         if ($currentBlock && $currentBlock.id === block.id && !blockHover) {
           setBlockOpacity(blockDimOpacity, 1200)
         }
+        if ($currentBlock && $currentBlock.id === block.id) blockFresh = false
       }, blockFullOpacityUntil - Date.now())
     }
+  }
+
+  function scheduleFreshBlockAura (block) {
+    if (blockFreshTimeout) clearTimeout(blockFreshTimeout)
+    if (blockFreshEndTimeout) clearTimeout(blockFreshEndTimeout)
+    blockFresh = false
+
+    blockFreshTimeout = setTimeout(() => {
+      if ($currentBlock && $currentBlock.id === block.id && block.height === $latestBlockHeight) {
+        blockFresh = true
+        blockFreshEndTimeout = setTimeout(() => {
+          if ($currentBlock && $currentBlock.id === block.id) blockFresh = false
+        }, blockFreshDurationMs)
+      }
+    }, blockFreshStartDelayMs)
   }
 
   function setBlockOpacity (opacity, duration=250) {
@@ -186,6 +208,7 @@
 
   function replayBlock () {
     if (txController) txController.replayLatestBlock()
+    if ($currentBlock) showNewBlockAtFullOpacity($currentBlock)
   }
 
   function focusBlock () {
@@ -497,7 +520,37 @@
       margin: auto;
 
       .block-area {
+        position: relative;
+        z-index: 1;
         padding-top: 100%;
+      }
+
+      &.block-fresh {
+        --fresh-angle: 0deg;
+
+        &::before,
+        &::after {
+          content: '';
+          display: block;
+          position: absolute;
+          z-index: 2;
+          inset: -0.35rem;
+          border-radius: 3px;
+          box-sizing: border-box;
+          pointer-events: none;
+        }
+
+        &::before {
+          border: 2px solid rgba(247, 147, 26, 0.35);
+          box-shadow: 0 0 18px rgba(247, 147, 26, 0.75), inset 0 0 10px rgba(247, 147, 26, 0.22);
+          animation: block-fresh-fade var(--fresh-duration) ease-out 1 forwards;
+        }
+
+        &::after {
+          border: 2px solid transparent;
+          border-image: conic-gradient(from var(--fresh-angle), transparent 0deg 284deg, rgba(247, 147, 26, 0.3) 302deg, #f7931a 326deg, rgba(255, 122, 0, 0.6) 345deg, transparent 360deg) 1;
+          animation: block-fresh-spin var(--fresh-duration) linear 1 forwards, block-fresh-fade var(--fresh-duration) ease-out 1 forwards;
+        }
       }
 
       .guide-area {
@@ -625,6 +678,33 @@
       }
     }
   }
+
+  @property --fresh-angle {
+    syntax: '<angle>';
+    initial-value: 0deg;
+    inherits: false;
+  }
+
+  @keyframes block-fresh-spin {
+    to {
+      --fresh-angle: 720deg;
+    }
+  }
+
+  @keyframes block-fresh-fade {
+    0% {
+      opacity: 0;
+    }
+    15% {
+      opacity: 1;
+    }
+    80% {
+      opacity: 0.75;
+    }
+    100% {
+      opacity: 0;
+    }
+  }
 </style>
 
 <svelte:window on:resize={resize} on:load={resize} on:click={pointerLeave} />
@@ -649,7 +729,7 @@
 
     <div class="block-area-wrapper">
       <div class="spacer" style="flex: {$pageWidth <= 640 ? '1.5' : '1'}"></div>
-      <div class="block-area-outer" style="width: {$blockAreaSize}px; height: {$blockAreaSize}px; --block-control-opacity: {blockDisplayOpacity}" on:pointerenter={focusBlock} on:pointerleave={dimBlock}>
+      <div class="block-area-outer" class:block-fresh={blockFresh} style="width: {$blockAreaSize}px; height: {$blockAreaSize}px; --block-control-opacity: {blockDisplayOpacity}; --fresh-duration: {blockFreshDurationMs}ms" on:pointerenter={focusBlock} on:pointerleave={dimBlock}>
         <div class="block-area">
           <BlockInfo block={$currentBlock} visible={$blockVisible && !$tinyScreen} on:hideBlock={hideBlock} on:quitExploring={quitExploring} />
         </div>
