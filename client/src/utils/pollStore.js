@@ -4,12 +4,14 @@ export function makePollStore (name, url, frequency, initialValue={}, responseHa
   let interval, timer
   const { subscribe, set, update } = writable(initialValue)
   if (!responseHandler) responseHandler = async (response, set) => {
-    const data = await response.json()
+    const body = await response.text()
+    if (!body) return
+    const data = JSON.parse(body)
     if (data) set(data)
   }
 
   const fetcher = () => {
-    fetch(`${url}?t=${Date.now()}`).then(response => { responseHandler(response, set) }).catch(error => {
+    fetch(`${url}?t=${Date.now()}`).then(response => responseHandler(response, set)).catch(error => {
       console.log(`error polling data for ${name}: `, error)
       if (timer) clearTimeout(timer)
       timer = setTimeout(fetcher, 5000)
