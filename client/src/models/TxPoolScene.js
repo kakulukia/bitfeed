@@ -2,10 +2,11 @@ import config from '../config.js'
 import TxSprite from './TxSprite.js'
 
 export default class TxPoolScene {
-  constructor ({ width, height, unit, padding, controller, heightStore, colorMode }) {
+  constructor ({ width, height, unit, padding, controller, heightStore, leftStore, colorMode }) {
     this.colorMode = colorMode || "age"
     this.maxHeight = 0
     this.heightStore = heightStore
+    this.leftStore = leftStore
     this.sceneType = 'pool'
     this.init({ width, height, unit, padding, controller })
   }
@@ -45,6 +46,7 @@ export default class TxPoolScene {
 
     this.scene.offset.x = (window.innerWidth - (this.blockWidth * this.gridSize)) / 2
     this.scene.offset.y = (window.innerHeight - (this.blockHeight * this.gridSize)) / 2
+    if (this.leftStore) this.leftStore.set(this.scene.offset.x)
   }
 
   setColorMode (mode) {

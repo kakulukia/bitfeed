@@ -6,7 +6,7 @@ import BitcoinBlock from '../models/BitcoinBlock.js'
 import TxSprite from '../models/TxSprite.js'
 import { FastVertexArray } from '../utils/memory.js'
 import { searchTx, fetchSpends, addSpends } from '../utils/search.js'
-import { overlay, txCount, mempoolCount, mempoolScreenHeight, blockVisible, currentBlock, selectedTx, detailTx, blockAreaSize, highlight, focusTx, colorMode, settings, blocksEnabled, latestBlockHeight, explorerBlock, blockTransitionDirection, loading, urlPath } from '../stores.js'
+import { overlay, txCount, mempoolCount, mempoolScreenHeight, mempoolScreenLeft, blockVisible, currentBlock, selectedTx, detailTx, blockAreaSize, highlight, focusTx, colorMode, settings, blocksEnabled, latestBlockHeight, explorerBlock, blockTransitionDirection, loading, urlPath } from '../stores.js'
 import config from "../config.js"
 import { tick } from 'svelte';
 
@@ -17,7 +17,7 @@ export default class TxController {
     this.debugVertexArray = new FastVertexArray(1024, TxSprite.dataSize)
     this.txs = {}
     this.expiredTxs = {}
-    this.poolScene = new TxMondrianPoolScene({ width, height, controller: this, heightStore: mempoolScreenHeight })
+    this.poolScene = new TxMondrianPoolScene({ width, height, controller: this, heightStore: mempoolScreenHeight, leftStore: mempoolScreenLeft })
     this.blockAreaSize = (width <= 620) ? Math.min(window.innerWidth * 0.7, window.innerHeight / 2.75) : Math.min(window.innerWidth * 0.75, window.innerHeight / 2.5)
     blockAreaSize.set(this.blockAreaSize)
     this.blockScene = null

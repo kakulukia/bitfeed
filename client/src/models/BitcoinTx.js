@@ -147,11 +147,24 @@ export default class BitcoinTx {
   }
 
   hoverOn (color = bluegreen) {
-    if (this.view) this.view.setHover(true, color)
+    if (this.view) this.view.setHover(true, color, this.hoverLens())
   }
 
   hoverOff () {
     if (this.view) this.view.setHover(false)
+  }
+
+  hoverLens () {
+    const radius = this.screenPosition && this.screenPosition.r
+    if (!radius) return null
+    const sizeLevel = this.gridPosition && this.gridPosition.r
+    const scale = sizeLevel && sizeLevel <= 2 ? 3 : (4 / 3)
+    return {
+      x: this.screenPosition.x,
+      y: this.screenPosition.y,
+      baseR: radius,
+      r: radius * scale
+    }
   }
 
   highlightOn (color = pink) {

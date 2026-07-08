@@ -1,6 +1,10 @@
 import TxSprite from './TxSprite.js'
 
 const highlightTransitionTime = 300
+const hoverGrowTransitionTime = 50
+const hoverShrinkTransitionTime = 1000
+const glowPadding = 2.25
+const glowAlpha = 0.55
 
 // converts from this class's update format to TxSprite's update format
 // now, id, value, position, size, color, alpha, duration, adjust
@@ -29,9 +33,16 @@ export default class TxView {
 
     this.hover = false
     this.highlight = false
+    this.lensSprite = null
+    this.lensGlowSprite = null
+    this.lensDestroyTimer = null
+    this.lensBaseRadius = 0
+    this.lensBoost = 0
+    this.lensGrowStartedAt = 0
   }
 
   destroy () {
+    this.destroyLens()
     if (this.sprite) {
       this.sprite.destroy()
       this.sprite = null
@@ -61,14 +72,7 @@ export default class TxView {
         this.vertexArray
       )
       // apply any pending modifications
-      if (this.hover) {
-        this.sprite.update({
-          ...this.highlightColor,
-          duration: highlightTransitionTime,
-          adjust: false,
-          modify: true
-        })
-      } else if (this.highlight) {
+      if (this.highlight) {
         this.sprite.update({
           ...this.highlightColor,
           duration: highlightTransitionTime,
@@ -81,21 +85,19 @@ export default class TxView {
         toSpriteUpdate(display, duration, minDuration, delay, start, adjust, smooth, boomerang)
       )
     }
+    this.updateLensPosition(display && display.position, duration, delay, start, adjust, smooth)
   }
 
-  setHover (hoverOn, color) {
+  setHover (hoverOn, color, lens = null) {
     if (hoverOn) {
       this.hover = true
-      this.hoverColor = color
-      this.sprite.update({
-        ...this.hoverColor,
-        duration: highlightTransitionTime,
-        adjust: false,
-        modify: true,
-      })
+      if (this.sprite) {
+        this.sprite.bringToFront()
+      }
+      this.showLens(lens)
     } else {
       this.hover = false
-      this.hoverColor = null
+      this.destroyLens(hoverShrinkTransitionTime)
       if (this.highlight) {
         if (this.sprite) {
           this.sprite.update({
@@ -115,6 +117,7 @@ export default class TxView {
     if (highlightOn) {
       this.highlight = true
       this.highlightColor = color
+      if (this.sprite) this.sprite.bringToFront()
       if (!this.hover) {
         if (this.sprite) {
           this.sprite.update({
@@ -125,6 +128,8 @@ export default class TxView {
           })
         }
       }
+      if (this.lensGlowSprite) this.lensGlowSprite.bringToFront()
+      if (this.lensSprite) this.lensSprite.bringToFront()
     } else {
       this.highlight = false
       this.highlightColor = null
@@ -136,5 +141,142 @@ export default class TxView {
 
   getPosition () {
     if (this.initialised && this.sprite) return this.sprite.getPosition()
+  }
+
+  showLens (lens) {
+    if (!lens || !this.vertexArray || !this.sprite) return
+    const display = this.sprite.getDisplay()
+
+    this.lensBoost = lens.r - lens.baseR
+    this.lensBaseRadius = lens.baseR
+    this.lensGrowStartedAt = performance.now()
+    if (this.lensDestroyTimer) clearTimeout(this.lensDestroyTimer)
+    this.lensDestroyTimer = null
+
+    if (!this.lensGlowSprite) {
+      this.lensGlowSprite = new TxSprite({
+        x: lens.x,
+        y: lens.y,
+        r: lens.baseR,
+        h: 0,
+        l: 0,
+        alpha: 0
+      }, this.vertexArray, false)
+    }
+
+    if (!this.lensSprite) {
+      this.lensSprite = new TxSprite({
+        x: lens.x,
+        y: lens.y,
+        r: lens.baseR,
+        h: display.h,
+        l: display.l,
+        alpha: 0
+      }, this.vertexArray, false)
+    }
+
+    this.lensGlowSprite.bringToFront()
+    this.lensSprite.bringToFront()
+
+    this.lensGlowSprite.update({
+      x: lens.x,
+      y: lens.y,
+      r: lens.r + glowPadding,
+      h: 0,
+      l: 0,
+      alpha: glowAlpha,
+      duration: hoverGrowTransitionTime,
+      adjust: false,
+      smooth: true
+    })
+
+    this.lensSprite.update({
+      x: lens.x,
+      y: lens.y,
+      r: lens.r,
+      h: display.h,
+      l: display.l,
+      alpha: display.alpha,
+      duration: hoverGrowTransitionTime,
+      adjust: false,
+      smooth: true
+    })
+  }
+
+  updateLensPosition (position, duration, delay, start, adjust, smooth) {
+    if ((!this.lensSprite && !this.lensGlowSprite) || !position) return
+
+    const update = {}
+    if (position.x != null) update.x = position.x
+    if (position.y != null) update.y = position.y
+    if (position.r != null) update.r = position.r + this.lensBoost
+    if (!Object.keys(update).length) return
+
+    const glowUpdate = { ...update }
+    if (glowUpdate.r != null) glowUpdate.r += glowPadding
+
+    if (this.lensGlowSprite) this.lensGlowSprite.update({
+      ...glowUpdate,
+      start,
+      duration,
+      delay,
+      adjust,
+      smooth
+    })
+
+    if (this.lensSprite) this.lensSprite.update({
+      ...update,
+      start,
+      duration,
+      delay,
+      adjust,
+      smooth
+    })
+  }
+
+  destroyLens (duration = 0) {
+    if (this.lensDestroyTimer) clearTimeout(this.lensDestroyTimer)
+    this.lensDestroyTimer = null
+    if (!this.lensSprite && !this.lensGlowSprite) return
+
+    const sprite = this.lensSprite
+    const glowSprite = this.lensGlowSprite
+    if (duration > 0) {
+      const growDelay = Math.max(0, hoverGrowTransitionTime - (performance.now() - this.lensGrowStartedAt))
+      if (growDelay > 0) {
+        this.lensDestroyTimer = setTimeout(() => {
+          this.lensDestroyTimer = null
+          if (!this.hover && this.lensSprite === sprite && this.lensGlowSprite === glowSprite) {
+            this.destroyLens(duration)
+          }
+        }, growDelay)
+        return
+      }
+      if (sprite) sprite.update({
+        r: this.lensBaseRadius,
+        alpha: 0,
+        duration,
+        adjust: false,
+        smooth: true
+      })
+      if (glowSprite) glowSprite.update({
+        r: this.lensBaseRadius + glowPadding,
+        alpha: 0,
+        duration,
+        adjust: false,
+        smooth: true
+      })
+      this.lensDestroyTimer = setTimeout(() => {
+        if (this.lensSprite === sprite) this.lensSprite = null
+        if (this.lensGlowSprite === glowSprite) this.lensGlowSprite = null
+        if (sprite) sprite.destroy()
+        if (glowSprite) glowSprite.destroy()
+      }, duration + 50)
+    } else {
+      this.lensSprite = null
+      this.lensGlowSprite = null
+      if (sprite) sprite.destroy()
+      if (glowSprite) glowSprite.destroy()
+    }
   }
 }

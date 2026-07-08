@@ -28,10 +28,12 @@ export class FastVertexArray {
     // console.log(this.data)
   }
 
-  insert (sprite) {
+  insert (sprite, counted = true) {
     // console.log('inserting into FVA')
-    this.count++
-    if (this.counter) this.counter.increment()
+    if (counted) {
+      this.count++
+      if (this.counter) this.counter.increment()
+    }
 
     let position
     if (this.freeSlots.length) {
@@ -48,9 +50,11 @@ export class FastVertexArray {
     return position
   }
 
-  remove (index) {
-    this.count--
-    if (this.counter) this.counter.decrement()
+  remove (index, counted = true) {
+    if (counted) {
+      this.count--
+      if (this.counter) this.counter.decrement()
+    }
     this.setData(index, this.nullSprite)
     this.freeSlots.push(index)
     this.sprites[index] = null
@@ -62,6 +66,24 @@ export class FastVertexArray {
     // console.log(`Updating chunk at ${index} (${index * this.stride})`)
     this.data.set(dataChunk, (index * this.stride))
     // this.print()
+  }
+
+  moveToFront (index) {
+    const sprite = this.sprites[index]
+    if (!sprite) return index
+
+    let target = this.lastSlot - 1
+    while (target > index && !this.sprites[target]) target--
+    if (target <= index) return index
+
+    const other = this.sprites[target]
+    this.sprites[target] = sprite
+    this.sprites[index] = other
+    sprite.moveVertexPointer(target)
+    other.moveVertexPointer(index)
+    sprite.compile()
+    other.compile()
+    return target
   }
 
   getData (index) {

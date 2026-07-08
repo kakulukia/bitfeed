@@ -4,7 +4,7 @@
   import TxRender from './TxRender.svelte'
   import getTxStream from '../controllers/TxStream.js'
   import { settings, overlay, serverConnected, serverDelay, txCount, mempoolCount,
-           mempoolScreenHeight, blockVisible, tinyScreen,
+           mempoolScreenHeight, mempoolScreenLeft, blockVisible, tinyScreen,
            compactScreen, currentBlock, latestBlockHeight, selectedTx, blockAreaSize,
            replayBlockTrigger, devEvents, devSettings, pageWidth, pageHeight, loading, freezeResize, fullscreenActive } from '../stores.js'
   import BlockInfo from '../components/BlockInfo.svelte'
@@ -352,7 +352,7 @@
     .mempool-count {
       position: absolute;
       bottom: .5em;
-      left: 0.5rem;
+      left: var(--mempool-left);
       font-size: 0.9rem;
       color: var(--palette-x);
     }
@@ -360,7 +360,7 @@
     .mempool-info {
       position: absolute;
       bottom: .5em;
-      left: 0.5rem;
+      left: var(--mempool-left);
       right: 0.5em;
       font-size: 0.9rem;
       color: var(--palette-x);
@@ -773,7 +773,7 @@
     <PriceChartBackground focused={priceChartFocused} />
     <TxRender controller={txController} />
 
-    <div class="mempool-height" style="bottom: calc({$mempoolScreenHeight + 20}px)">
+    <div class="mempool-height" style="bottom: calc({$mempoolScreenHeight + 20}px); --mempool-left: {$mempoolScreenLeft}px">
       <div class="height-bar" />
       {#if $tinyScreen}
         <div class="mempool-info">
