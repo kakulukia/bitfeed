@@ -257,6 +257,7 @@
   const priceChartModes = ['none', '1d', '30d']
   let fxLabel = ''
   let priceChartLabel = ''
+  let priceChartFocused = false
   $: {
     const rate = $exchangeRates[$settings.currency]
     if (rate && rate.last)
@@ -345,7 +346,7 @@
     left: 0;
     right: 0;
     margin: auto;
-    padding: 0 .5rem;
+    padding: 0;
     transition: bottom 1000ms;
 
     .mempool-count {
@@ -370,10 +371,49 @@
     }
 
     .height-bar {
+      position: relative;
       width: 100%;
       height: 1px;
-      border-bottom: dashed 2px var(--palette-x);
-      opacity: 0.75;
+      opacity: 0.85;
+      transform: translateY(-2px);
+
+      &::before,
+      &::after {
+        content: '';
+        position: absolute;
+        left: 0;
+        right: 0;
+        pointer-events: none;
+      }
+
+      &::before {
+        top: -7px;
+        height: 18px;
+        background:
+          linear-gradient(90deg, transparent 0%, rgba(18, 245, 214, 0.26) 50%, transparent 100%),
+          linear-gradient(90deg, transparent 0%, rgba(18, 245, 214, 0.22) 50%, transparent 100%),
+          linear-gradient(90deg, transparent 0%, rgba(18, 245, 214, 0.3) 50%, transparent 100%),
+          linear-gradient(90deg, transparent 0%, rgba(18, 245, 214, 0.18) 50%, transparent 100%);
+        background-size: 15rem 100%, 22rem 100%, 31rem 100%, 18rem 100%;
+        filter: blur(5px);
+        opacity: 0.6;
+        z-index: 1;
+        animation: mempool-tide-fancy 18s linear infinite;
+      }
+
+      &::after {
+        top: 1px;
+        height: 2px;
+        background:
+          linear-gradient(90deg, transparent 43%, rgba(18, 245, 214, 0.78) 50%, transparent 57%),
+          linear-gradient(90deg, transparent 46%, rgba(18, 245, 214, 0.62) 50%, transparent 54%),
+          linear-gradient(90deg, transparent 40%, rgba(18, 245, 214, 0.72) 50%, transparent 60%),
+          linear-gradient(90deg, transparent 47%, rgba(18, 245, 214, 0.56) 50%, transparent 53%);
+        background-size: 15rem 100%, 22rem 100%, 31rem 100%, 18rem 100%;
+        opacity: 0.45;
+        z-index: 2;
+        animation: mempool-tide-fancy 18s linear infinite;
+      }
     }
   }
 
@@ -705,6 +745,24 @@
       opacity: 0;
     }
   }
+
+  @keyframes mempool-tide {
+    from {
+      background-position-x: 0;
+    }
+    to {
+      background-position-x: 18rem;
+    }
+  }
+
+  @keyframes mempool-tide-fancy {
+    from {
+      background-position: 0 0, 0 0, 0 0, 0 0;
+    }
+    to {
+      background-position: 30rem 0, -22rem 0, 62rem 0, -36rem 0;
+    }
+  }
 </style>
 
 <svelte:window on:resize={resize} on:load={resize} on:click={pointerLeave} />
@@ -712,7 +770,7 @@
 
 <div class="tx-area" class:light-mode={!$settings.darkMode} class:ambient-mode={$fullscreenActive} style="width: {canvasWidth}; height: {canvasHeight}">
   <div class="canvas-wrapper" on:pointerleave={pointerLeave} on:pointermove={pointerMove} on:click={onClick}>
-    <PriceChartBackground />
+    <PriceChartBackground focused={priceChartFocused} />
     <TxRender controller={txController} />
 
     <div class="mempool-height" style="bottom: calc({$mempoolScreenHeight + 20}px)">
@@ -750,7 +808,7 @@
     <div class="status" class:tiny={$tinyScreen}>
       <div class="row">
         {#if $settings.showFX && fxLabel }
-          <span class="fx-ticker {fxColor}" on:click={togglePriceChart}>{ fxLabel }</span>
+          <span class="fx-ticker {fxColor}" on:click={togglePriceChart} on:pointerenter={() => priceChartFocused = true} on:pointerleave={() => priceChartFocused = false}>{ fxLabel }</span>
         {/if}
         {#if $tinyScreen && $currentBlock }
           <span class="block-height"><b>Block: </b>{ numberFormat.format($currentBlock.height) }</span>

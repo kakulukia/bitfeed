@@ -2,6 +2,8 @@
 import { onMount } from 'svelte'
 import { settings } from '../stores.js'
 
+export let focused = false
+
 const chartWidth = 1000
 const chartHeight = 320
 const padding = 20
@@ -84,7 +86,7 @@ function updateChart (data) {
     display: flex;
     align-items: center;
     justify-content: center;
-    opacity: 0.55;
+    opacity: 0.28;
   }
 
   svg {
@@ -112,11 +114,18 @@ function updateChart (data) {
     stroke-width: 44;
     opacity: 0.4;
     filter: blur(20px);
+    transition: filter 900ms ease, opacity 900ms ease, stroke-width 900ms ease;
+  }
+
+  .focused .glow {
+    stroke-width: 11;
+    opacity: 1;
+    filter: blur(5px);
   }
 </style>
 
 {#if mode !== 'none' && path}
-  <div class="price-chart-background" data-points={points.length} aria-hidden="true">
+  <div class="price-chart-background" class:focused data-points={points.length} aria-hidden="true">
     <svg viewBox={`0 0 ${chartWidth} ${chartHeight}`}>
       <path class="glow {chartTrend}" d={path} />
     </svg>
