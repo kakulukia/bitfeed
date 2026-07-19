@@ -10,6 +10,8 @@ import { overlay, txCount, mempoolCount, mempoolScreenHeight, mempoolScreenLeft,
 import config from "../config.js"
 import { tick } from 'svelte';
 
+const nextFrame = () => new Promise(resolve => requestAnimationFrame(resolve))
+
 export default class TxController {
   constructor ({ width, height }) {
     this.vertexArray = new FastVertexArray(2048, TxSprite.dataSize, txCount)
@@ -318,19 +320,20 @@ export default class TxController {
       const prevBlock = this.explorerBlock
       const prevBlockScene = this.explorerBlockScene
       if (prevBlock.height < block.height) {
-        prevBlockScene.exitLeft()
+        await prevBlockScene.exitAsync(false)
         enterFromRight = true
       }
-      else prevBlockScene.exitRight()
+      else await prevBlockScene.exitAsync(true)
       prevBlockScene.expire(3000)
     } else if (this.blockScene) {
-      this.blockScene.exitRight()
+      await this.blockScene.exitAsync(true)
     }
 
     this.explorerBlock = block
 
     if (this.blocksEnabled) {
-      this.explorerBlockScene = new TxBlockScene({ width: this.blockAreaSize, height: this.blockAreaSize, blockId: block.id, controller: this, colorMode: this.colorMode })
+      const explorerBlockScene = new TxBlockScene({ width: this.blockAreaSize, height: this.blockAreaSize, blockId: block.id, controller: this, colorMode: this.colorMode })
+      this.explorerBlockScene = explorerBlockScene
       for (let i = 0; i < block.txns.length; i++) {
         const tx = new BitcoinTx({
           ...block.txns[i],
@@ -338,17 +341,17 @@ export default class TxController {
         }, this.vertexArray)
         this.txs[tx.id] = tx
         this.txs[tx.id].applyHighlighting(this.highlightCriteria)
-        this.explorerBlockScene.insert(tx, 0, false)
+        explorerBlockScene.insert(tx, 0, false)
       }
-      this.explorerBlockScene.prepareAll()
-      this.explorerBlockScene.layoutAll()
-      if (enterFromRight) {
-        blockTransitionDirection.set('right')
-        this.explorerBlockScene.enterRight()
-      } else {
-        blockTransitionDirection.set('left')
-        this.explorerBlockScene.enterLeft()
-      }
+
+      await nextFrame()
+      explorerBlockScene.prepareAll()
+      await nextFrame()
+      explorerBlockScene.layoutAll()
+      await nextFrame()
+
+      blockTransitionDirection.set(enterFromRight ? 'right' : 'left')
+      await explorerBlockScene.enterAsync(enterFromRight)
     }
 
     blockVisible.set(true)

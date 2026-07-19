@@ -253,6 +253,19 @@ export default class TxBlockScene extends TxMondrianPoolScene {
     }
   }
 
+  async enterAsync (right) {
+    this.hidden = false
+    this.exited = false
+    const ids = this.getActiveTxList()
+    const start = performance.now()
+    for (let i = 0; i < ids.length; i++) {
+      this.enterTx(this.txs[ids[i]], start, right)
+      if (i > 0 && i % 1500 === 0) {
+        await new Promise(resolve => requestAnimationFrame(resolve))
+      }
+    }
+  }
+
   enterRight () {
     this.enter(true)
   }
@@ -266,7 +279,7 @@ export default class TxBlockScene extends TxMondrianPoolScene {
       display: {
         position: {
           x: tx.screenPosition.x + (right ? window.innerWidth : -window.innerWidth) + ((Math.random()-0.5) * (window.innerHeight/4)),
-          y: tx.screenPosition.y + ((Math.random()-0.5) * (window.innerHeight/4)),
+          y: tx.screenPosition.y,
           r: tx.pixelPosition.r
         },
         color: {
@@ -289,6 +302,19 @@ export default class TxBlockScene extends TxMondrianPoolScene {
     const start = performance.now()
     for (let i = 0; i < ids.length; i++) {
       this.exitTx(this.txs[ids[i]], start, right)
+    }
+  }
+
+  async exitAsync (right) {
+    this.hidden = true
+    this.exited = true
+    const ids = this.getActiveTxList()
+    const start = performance.now()
+    for (let i = 0; i < ids.length; i++) {
+      this.exitTx(this.txs[ids[i]], start, right)
+      if (i > 0 && i % 1500 === 0) {
+        await new Promise(resolve => requestAnimationFrame(resolve))
+      }
     }
   }
 

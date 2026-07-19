@@ -6,9 +6,9 @@
   import Icon from '../components/Icon.svelte'
   import closeIcon from '../assets/icon/cil-x-circle.svg'
   import { shortBtcFormat, longBtcFormat, dateFormat, numberFormat, feeRateFormat } from '../utils/format.js'
-  import { exchangeRates, settings, blocksEnabled, latestBlockHeight, blockTransitionDirection, loading, freezeResize, fullscreenActive, pageWidth, pageHeight, overlay } from '../stores.js'
+  import { exchangeRates, settings, blocksEnabled, latestBlockHeight, blockTransitionDirection, loading, freezeResize, fullscreenActive, pageWidth, pageHeight, overlay, explorerBlock, urlPath } from '../stores.js'
   import { formatCurrency } from '../utils/fx.js'
-  import { searchBlockHeight } from '../utils/search.js'
+  import { fetchBlockByHeight } from '../utils/search.js'
 
 	const dispatch = createEventDispatcher()
 
@@ -17,8 +17,15 @@
   export let block
   export let visible
   const newBlockDelay = 2000
+  const blockNavigationAnimationMs = 2700 // 200ms delay + 2000ms duration + 500ms jitter
+  const blockNavigationQueueDelayMs = 500
   let restoring = false
   let formattedBlockValue = ''
+  let navigationQueue = []
+  let navigationRunning = false
+  let activeNavigationHeight = null
+  let navigationAnimationUntil = 0
+  let escapePending = false
 
   let compactView
   let landscape
@@ -130,35 +137,94 @@
     }
   }
 
-  async function navigatePrevBlock () {
-    if (!$loading && block) {
-      loading.increment()
-      await searchBlockHeight(block.height - 1)
+  async function loadNavigationBlock (height) {
+    loading.increment()
+    try {
+      return await fetchBlockByHeight(height)
+    } catch (error) {
+      console.log('error fetching block ', error)
+      return null
+    } finally {
       loading.decrement()
     }
   }
 
-  async function navigateNextBlock ({ routeLatest = false } = {}) {
-    if (!$loading && block) {
-      const nextHeight = block.height + 1
-      if (nextHeight < $latestBlockHeight || (routeLatest && nextHeight === $latestBlockHeight)) {
-        loading.increment()
-        await searchBlockHeight(nextHeight)
-        loading.decrement()
-      } else {
-        dispatch('quitExploring')
+  function queueBlockNavigation (direction) {
+    if (!block || escapePending) return
+
+    const lastQueued = navigationQueue[navigationQueue.length - 1]
+    const fromHeight = lastQueued ? lastQueued.height : (activeNavigationHeight != null ? activeNavigationHeight : block.height)
+    const height = fromHeight + (direction === 'prev' ? -1 : 1)
+    if (height < 0 || height > $latestBlockHeight) return
+
+    navigationQueue.push({
+      height,
+      blockPromise: height === $latestBlockHeight ? null : loadNavigationBlock(height)
+    })
+    runNavigationQueue()
+  }
+
+  function queueEscape () {
+    navigationQueue = []
+    escapePending = true
+    runNavigationQueue()
+  }
+
+  async function runNavigationQueue () {
+    if (navigationRunning) return
+    navigationRunning = true
+
+    try {
+      while (navigationQueue.length || escapePending) {
+        if (escapePending) {
+          const remainingAnimationMs = navigationAnimationUntil - Date.now()
+          if (remainingAnimationMs > 0) await new Promise(resolve => setTimeout(resolve, remainingAnimationMs))
+          escapePending = false
+          navigationAnimationUntil = 0
+          hideBlock()
+          break
+        }
+
+        const navigation = navigationQueue.shift()
+        activeNavigationHeight = navigation.height
+        const isLatest = navigation.height === $latestBlockHeight
+        const nextBlock = isLatest ? null : await (navigation.blockPromise || loadNavigationBlock(navigation.height))
+
+        if (escapePending) {
+          activeNavigationHeight = null
+          continue
+        }
+
+        if (isLatest) {
+          dispatch('quitExploring')
+        } else if (nextBlock && nextBlock.id) {
+          urlPath.set(`/block/height/${navigation.height}`)
+          overlay.set(null)
+          explorerBlock.set(nextBlock)
+        } else {
+          activeNavigationHeight = null
+          continue
+        }
+
+        navigationAnimationUntil = Date.now() + blockNavigationAnimationMs
+        await new Promise(resolve => setTimeout(resolve, blockNavigationQueueDelayMs))
+        activeNavigationHeight = null
       }
+    } finally {
+      activeNavigationHeight = null
+      navigationRunning = false
+      if (navigationQueue.length || escapePending) runNavigationQueue()
     }
   }
 
-  async function explorePrevBlock (e) {
+  function explorePrevBlock (e) {
     e.preventDefault()
-    await navigatePrevBlock()
+    queueBlockNavigation('prev')
   }
 
-  async function exploreNextBlock (e) {
+  function exploreNextBlock (e) {
     e.preventDefault()
-    await navigateNextBlock()
+    queueBlockNavigation('next')
   }
 
   function isEditableTarget (target) {
@@ -167,14 +233,17 @@
     return target.isContentEditable || tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT'
   }
 
-  async function handleKeydown (e) {
+  function handleKeydown (e) {
     if (!visible || !block || !$blocksEnabled || $overlay || e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey || isEditableTarget(e.target)) return
-    if (e.key === 'ArrowLeft' && hasPrevBlock) {
+    if (e.key === 'Escape') {
       e.preventDefault()
-      await navigatePrevBlock()
+      queueEscape()
+    } else if (e.key === 'ArrowLeft' && hasPrevBlock) {
+      e.preventDefault()
+      queueBlockNavigation('prev')
     } else if (e.key === 'ArrowRight' && hasNextBlock) {
       e.preventDefault()
-      await navigateNextBlock({ routeLatest: true })
+      queueBlockNavigation('next')
     }
   }
 </script>

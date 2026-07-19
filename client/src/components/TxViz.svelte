@@ -33,6 +33,7 @@
   let lastFrameUpdate = 0
   const blockFullOpacityMs = 21000
   const blockFreshStartDelayMs = 6900
+  const blockReturnFreshStartDelayMs = 2000
   const blockFreshDurationMs = (blockFullOpacityMs - blockFreshStartDelayMs) / 3
   const blockDimOpacity = 0.21
   let blockOpacityTimeout
@@ -41,15 +42,19 @@
   let blockOpacityBlockId
   let blockFullOpacityUntil = 0
   let blockFresh = false
+  let nextBlockFreshStartDelayMs = blockFreshStartDelayMs
   let blockHover = false
   let blockDisplayOpacity = blockDimOpacity
   let lastReplayBlockTrigger = 0
   let roundedMempoolCount = 0
   let mempoolVbytes = 0
   let mempoolBlockEstimate = null
+  let mempoolReady = config.noTxFeed
+  let startupLoading = true
 
   $: roundedMempoolCount = Math.round($mempoolCount)
   $: mempoolBlockEstimate = formatMempoolBlockEstimate(mempoolVbytes)
+  $: if (mempoolReady && (config.noBlockFeed || $currentBlock)) startupLoading = false
 
   let txStream
   if (!config.noTxFeed || !config.noBlockFeed) txStream = getTxStream()
@@ -64,7 +69,8 @@
 
   $: {
     if (txController && $currentBlock && $currentBlock.id !== blockOpacityBlockId) {
-      showNewBlockAtFullOpacity($currentBlock)
+      showNewBlockAtFullOpacity($currentBlock, nextBlockFreshStartDelayMs)
+      nextBlockFreshStartDelayMs = blockFreshStartDelayMs
     }
   }
 
@@ -119,6 +125,7 @@
     }
     if (!config.noTxFeed || !config.noBlockFeed) {
       txStream.subscribe('mempool_count', mempool => {
+        mempoolReady = true
         if (typeof mempool === 'number') {
           $mempoolCount = mempool
           mempoolVbytes = 0
@@ -158,18 +165,22 @@
   }
 
   function hideBlock () {
+    stopFreshBlockAura()
     $blockVisible = false
   }
 
   function quitExploring () {
-    if (txController) txController.resumeLatest()
+    if (txController) {
+      nextBlockFreshStartDelayMs = blockReturnFreshStartDelayMs
+      txController.resumeLatest()
+    }
   }
 
-  function showNewBlockAtFullOpacity (block) {
+  function showNewBlockAtFullOpacity (block, freshStartDelayMs = blockFreshStartDelayMs) {
     if (blockOpacityTimeout) clearTimeout(blockOpacityTimeout)
     blockOpacityBlockId = block.id
     blockFullOpacityUntil = Date.now() + blockFullOpacityMs
-    scheduleFreshBlockAura(block)
+    scheduleFreshBlockAura(block, freshStartDelayMs)
 
     if (!blockHover) setBlockOpacity(Date.now() < blockFullOpacityUntil ? 1 : blockDimOpacity, 250)
     if (Date.now() < blockFullOpacityUntil) {
@@ -182,10 +193,14 @@
     }
   }
 
-  function scheduleFreshBlockAura (block) {
+  function stopFreshBlockAura () {
     if (blockFreshTimeout) clearTimeout(blockFreshTimeout)
     if (blockFreshEndTimeout) clearTimeout(blockFreshEndTimeout)
     blockFresh = false
+  }
+
+  function scheduleFreshBlockAura (block, startDelayMs) {
+    stopFreshBlockAura()
 
     blockFreshTimeout = setTimeout(() => {
       if ($currentBlock && $currentBlock.id === block.id && block.height === $latestBlockHeight) {
@@ -194,7 +209,7 @@
           if ($currentBlock && $currentBlock.id === block.id) blockFresh = false
         }, blockFreshDurationMs)
       }
-    }, blockFreshStartDelayMs)
+    }, startDelayMs)
   }
 
   function setBlockOpacity (opacity, duration=250) {
@@ -256,6 +271,7 @@
   const fxColor = 'good'
   const priceChartModes = ['none', '1d', '30d']
   let fxLabel = ''
+  let priceChartModeLabel = ''
   let priceChartLabel = ''
   let priceChartTrend = 'good'
   let priceChartFocused = false
@@ -267,7 +283,8 @@
   $: {
     const chartMode = $settings.priceChartMode || '30d'
     const chartCurrency = ($settings.currency || 'USD').toLowerCase()
-    priceChartLabel = chartMode.toUpperCase()
+    priceChartModeLabel = chartMode.toUpperCase()
+    priceChartLabel = priceChartModeLabel
     priceChartTrend = 'good'
     if ($priceChartChange && $priceChartChange.mode === chartMode && $priceChartChange.currency === chartCurrency) {
       const percent = $priceChartChange.percent
@@ -519,6 +536,12 @@
         font-size: 0.72rem;
         font-weight: bold;
         line-height: 1;
+        opacity: 0.2;
+        transition: opacity 300ms;
+
+        &.focused {
+          opacity: 1;
+        }
 
         &.bad {
           color: var(--palette-bad);
@@ -838,8 +861,8 @@
         {#if $settings.showNetworkStatus }
           <div class="status-light {connectionColor}" title={connectionTitle}></div>
         {/if}
-        {#if $settings.priceChartMode !== 'none' && priceChartFocused }
-          <span class="price-chart-mode {priceChartTrend}">{ priceChartLabel }</span>
+        {#if $settings.priceChartMode !== 'none' }
+          <span class="price-chart-mode {priceChartTrend}" class:focused={priceChartFocused}>{ priceChartFocused ? priceChartLabel : priceChartModeLabel }</span>
         {/if}
       </div>
     </div>
@@ -870,8 +893,8 @@
     {/if}
   {/if}
 
-  {#if $loading}
-    <div class="loading-overlay" in:fade={{ delay: 1000, duration: 500 }} out:fade={{ duration: 200 }}>
+  {#if startupLoading || $loading}
+    <div class="loading-overlay" in:fade={{ delay: startupLoading ? 0 : 1000, duration: 500 }} out:fade={{ duration: 200 }}>
       <div class="loading-wrapper">
         <LoadingAnimation />
         <p class="loading-msg">loading</p>

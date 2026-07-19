@@ -28,7 +28,10 @@ const types = {
 }
 
 function sendFile(res, file) {
-  res.writeHead(200, { 'content-type': types[path.extname(file)] || 'application/octet-stream' })
+  res.writeHead(200, {
+    'content-type': types[path.extname(file)] || 'application/octet-stream',
+    'cache-control': 'no-store',
+  })
   fs.createReadStream(file).pipe(res)
 }
 

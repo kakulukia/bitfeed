@@ -180,6 +180,7 @@ async function fetchBlockByHeight (height) {
     throw new Error(response.status)
   }
 }
+export {fetchBlockByHeight as fetchBlockByHeight}
 
 async function fetchSpends (txid) {
   if (txid == null) return
