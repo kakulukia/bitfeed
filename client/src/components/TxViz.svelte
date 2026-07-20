@@ -42,6 +42,7 @@
   let blockOpacityBlockId
   let blockFullOpacityUntil = 0
   let blockFresh = false
+  let rehideBlockAfterAuraId = null
   let nextBlockFreshStartDelayMs = blockFreshStartDelayMs
   let blockHover = false
   let blockDisplayOpacity = blockDimOpacity
@@ -118,8 +119,12 @@
     if (!config.noBlockFeed) {
       txStream.subscribe('block', ({block, realtime}) => {
         if (block) {
+          const rehideAfterAura = $currentBlock && !$blockVisible
           const added = txController.addBlock(block, realtime)
-          if (added && added.id) $lastBlockId = added.id
+          if (added && added.id) {
+            rehideBlockAfterAuraId = rehideAfterAura ? added.id : null
+            $lastBlockId = added.id
+          }
         }
       })
     }
@@ -166,6 +171,7 @@
 
   function hideBlock () {
     stopFreshBlockAura()
+    rehideBlockAfterAuraId = null
     $blockVisible = false
   }
 
@@ -206,7 +212,10 @@
       if ($currentBlock && $currentBlock.id === block.id && block.height === $latestBlockHeight) {
         blockFresh = true
         blockFreshEndTimeout = setTimeout(() => {
-          if ($currentBlock && $currentBlock.id === block.id) blockFresh = false
+          if ($currentBlock && $currentBlock.id === block.id) {
+            blockFresh = false
+            if (rehideBlockAfterAuraId === block.id) hideBlock()
+          }
         }, blockFreshDurationMs)
       }
     }, startDelayMs)
