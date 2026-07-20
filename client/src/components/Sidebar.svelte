@@ -46,6 +46,7 @@ onMount(() => {
   document.addEventListener('fullscreenchange', syncFullscreen)
   return () => {
     document.removeEventListener('fullscreenchange', syncFullscreen)
+    showCursor()
     if (sidebarIdleTimer) clearTimeout(sidebarIdleTimer)
   }
 })
@@ -123,14 +124,20 @@ function hideFullscreenExit () {
 }
 
 function recordActivity () {
+  showCursor()
   sidebarIdleHidden = false
   revealFullscreenExit()
   scheduleSidebarIdleHide()
 }
 
+function showCursor () {
+  document.documentElement.classList.remove('cursor-hidden')
+}
+
 function scheduleSidebarIdleHide () {
   if (sidebarIdleTimer) clearTimeout(sidebarIdleTimer)
   sidebarIdleTimer = setTimeout(() => {
+    document.documentElement.classList.add('cursor-hidden')
     if (!$sidebarToggle && !$fullscreenActive) sidebarIdleHidden = true
   }, sidebarIdleMs)
 }
@@ -192,6 +199,11 @@ function scheduleSidebarIdleHide () {
       background: var(--palette-d);
       opacity: 1;
     }
+  }
+
+  :global(html.cursor-hidden),
+  :global(html.cursor-hidden *) {
+    cursor: none !important;
   }
 </style>
 
