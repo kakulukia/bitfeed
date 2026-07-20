@@ -24,6 +24,7 @@
   import { fade } from 'svelte/transition'
   import config from '../config.js'
 
+  const clickToDrop = new URLSearchParams(window.location.search).has('dropOnClick')
   let width = window.innerWidth - 20
   let height = window.innerHeight - 20
   let txController
@@ -327,7 +328,7 @@
       x: e.clientX,
       y: window.innerHeight - e.clientY
     }
-    if (txController) txController.mouseClick(position)
+    if (txController) txController.mouseClick(position, clickToDrop)
   }
 
   function pointerMove (e) {

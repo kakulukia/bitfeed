@@ -6,6 +6,7 @@ import BitcoinBlock from '../models/BitcoinBlock.js'
 import TxSprite from '../models/TxSprite.js'
 import { FastVertexArray } from '../utils/memory.js'
 import { searchTx, fetchSpends, addSpends } from '../utils/search.js'
+import { highlightE } from '../utils/color.js'
 import { overlay, txCount, mempoolCount, mempoolScreenHeight, mempoolScreenLeft, blockVisible, currentBlock, selectedTx, detailTx, blockAreaSize, highlight, focusTx, colorMode, settings, blocksEnabled, latestBlockHeight, explorerBlock, blockTransitionDirection, loading, urlPath } from '../stores.js'
 import config from "../config.js"
 import { tick } from 'svelte';
@@ -152,23 +153,44 @@ export default class TxController {
   }
 
   dropTx (txid) {
-    if (this.txs[txid] && this.poolScene.drop(txid)) {
-      this.txs[txid].view.update({
+    const tx = this.txs[txid]
+    if (tx && this.poolScene.drop(txid)) {
+      const radius = tx.screenPosition.r
+      const warningColor = {
+        h: highlightE.h + ((Math.random() - 0.5) * 0.04),
+        l: highlightE.l + ((Math.random() - 0.5) * 0.08)
+      }
+      tx.hoverOff()
+      tx.highlightOff()
+      tx.view.destroyLens()
+      if (this.selectedTx === tx) {
+        this.selectedTx = null
+        selectedTx.set(null)
+      }
+      tx.view.update({
         display: {
-          position: {
-            y: -100, //this.txs[txid].screenPosition.y - 100
-          },
-          // color: {
-          //   alpha: 0
-          // }
+          color: warningColor
         },
         delay: 0,
-        duration: 2000
+        duration: 1500,
+        smooth: 'in'
+      })
+      tx.view.update({
+        display: {
+          position: {
+            r: Math.min(Math.max(radius * 3, radius + 12), radius + 48)
+          },
+          color: {
+            alpha: 0
+          }
+        },
+        delay: 1200,
+        duration: 900,
+        smooth: true
       })
       setTimeout(() => {
         this.destroyTx(txid)
-      }, 2000)
-      // this.poolScene.layoutAll()
+      }, 2100)
     }
   }
 
@@ -442,11 +464,15 @@ export default class TxController {
     }
   }
 
-  async mouseClick (position) {
+  async mouseClick (position, drop = false) {
     if (this.poolScene) {
       let selected = this.poolScene.selectAt(position)
       if (!selected && this.blockScene && !this.explorerBlock && !this.blockScene.hidden) selected = this.blockScene.selectAt(position)
       if (!selected && this.explorerBlockScene && this.explorerBlock && !this.explorerBlockScene.hidden) selected = this.explorerBlockScene.selectAt(position)
+      if (drop && selected && selected.state === 'pool') {
+        this.dropTx(selected.id)
+        return
+      }
 
       let sameTx = true
       if (selected !== this.selectedTx) {

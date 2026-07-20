@@ -29,9 +29,7 @@ function interpolateAttributeStart(attribute, now, modular) {
         delta = 2 - delta
       }
     }
-    if (attribute.e) {
-      delta = smootherstep(delta)
-    }
+    if (attribute.e) delta = attribute.e === 'in' ? delta * delta * delta : smootherstep(delta)
     if (modular && Math.abs(attribute.a - attribute.b) > 0.5) {
       if (attribute.a > 0.5) {
         attribute.a -= 1
@@ -100,7 +98,7 @@ export default class TxSprite {
         attributes[key].b = updateMap[key]
 
         if (!adjust || !inProgress) {
-          if (smooth) attributes[key].e = true
+          if (smooth) attributes[key].e = smooth
           else if (!smooth && attributes[key].e) delete attributes[key].e
           if (boomerang) attributes[key].boom = true
           else if (!boomerang && attributes[key].boom) delete attributes[key].boom
