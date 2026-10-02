@@ -1,0 +1,63 @@
+name: Build Bitfeed Remix images
+
+on:
+  workflow_dispatch:
+    inputs:
+      publish_images:
+        description: Publish images to GHCR after release approval
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  test-server:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Run server regression tests
+        run: docker build --target test --tag bitfeed-remix-server:test server
+      - name: Check backend dependency advisories
+        env:
+          # See UMBREL.md for the scoped advisory review and mandatory version guard.
+          HEX_IGNORE_ADVISORIES: EEF-CVE-2026-43966,EEF-CVE-2026-43969
+        run: docker run --rm --env HEX_IGNORE_ADVISORIES --entrypoint mix bitfeed-remix-server:test hex.audit
+
+  images:
+    needs: test-server
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        component: [client, server]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - if: inputs.publish_images
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build both architectures
+        id: build
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: ./${{ matrix.component }}
+          platforms: linux/amd64,linux/arm64
+          push: ${{ inputs.publish_images }}
+          tags: ghcr.io/${{ github.repository_owner }}/bitfeed-remix-${{ matrix.component }}:sha-${{ github.sha }}
+          labels: |
+            org.opencontainers.image.title=Bitfeed Remix
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.licenses=MIT
+      - name: Record the immutable Umbrel image reference
+        if: inputs.publish_images
+        env:
+          IMAGE_REF: ghcr.io/${{ github.repository_owner }}/bitfeed-remix-${{ matrix.component }}:sha-${{ github.sha }}@${{ steps.build.outputs.digest }}
+        run: printf '%s\n' "$IMAGE_REF" >> "$GITHUB_STEP_SUMMARY"
