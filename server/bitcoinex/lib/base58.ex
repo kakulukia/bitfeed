@@ -1,4 +1,5 @@
 defmodule Bitcoinex.Base58 do
+  import Kernel, except: [binary_slice: 2]
   @moduledoc """
     Includes Base58 serialization and validation.
 

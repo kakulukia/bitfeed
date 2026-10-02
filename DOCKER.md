@@ -2,16 +2,7 @@
 
 ## Images
 
-Client and server container images are automatically built for each tagged release and available from the [Github Container Registry](https://github.com/bitfeed-project?tab=packages&repo_name=bitfeed):
-
-Use like
-```yml
-image: ghcr.io/bitfeed-project/bitfeed-client:v2.1.2
-```
-
-```yml
-image: ghcr.io/bitfeed-project/bitfeed-server:v2.1.2
-```
+Bitfeed Remix images are prepared by the manually triggered `remix-images.yml` workflow. They are not published yet. Release images use commit tags and must be pinned by digest in the Umbrel package. See [UMBREL.md](UMBREL.md).
 
 Alternatively, build your own containers from source using the provided Dockerfiles:
 
