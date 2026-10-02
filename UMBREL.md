@@ -24,7 +24,7 @@ The client uses Node 22 and Nginx's standard entrypoint. The server uses Elixir 
 
 ## Prepare a public release
 
-The two `UNPUBLISHED` image references in `kakulukia-bitfeed-remix/docker-compose.yml` deliberately prevent treating this draft as an installable release. Replace them only with real, publicly pullable multi-platform images and their immutable index digests.
+The compose file pins the publicly available AMD64/ARM64 images built from source commit `2dc9af02aeeb4d71b4e114f5d531c5734042d991`, using their commit tags and immutable registry index digests. After publication of the finalized store files, validation on an approved Umbrel is still required before announcing the release. For future image releases, repeat the checks below and use the new registry digests.
 
 1. Resolve the two remaining Cowlib audit advisories described below, then review and authorize the source commit and its publication. Keep this fork-specific packaging separate from the existing upstream UI pull request when choosing the release branch.
 2. Make `.github/workflows/remix-images.yml` available on the fork's default branch. It runs only through **Run workflow**, with no publication on ordinary pushes or tags. The `publish_images` option defaults to `false`; leave it unchecked for a build test. Tests and the dependency audit must pass in either mode.

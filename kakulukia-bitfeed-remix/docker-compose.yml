@@ -1,4 +1,4 @@
-# Release draft: replace both image references with the published tag and digest.
+# Published multiarch image indexes from the reviewed source commit.
 services:
   app_proxy:
     environment:
@@ -6,7 +6,7 @@ services:
       APP_PORT: 80
 
   web:
-    image: ghcr.io/kakulukia/bitfeed-remix-client:UNPUBLISHED
+    image: ghcr.io/kakulukia/bitfeed-remix-client:sha-2dc9af02aeeb4d71b4e114f5d531c5734042d991@sha256:f5329b1b10717c1bf3fddfb5c38323cf15e89095e543374c5003fdff14b0bf83
     restart: on-failure
     stop_grace_period: 1m
     depends_on:
@@ -17,7 +17,7 @@ services:
       BACKEND_PORT: 8315
 
   api:
-    image: ghcr.io/kakulukia/bitfeed-remix-server:UNPUBLISHED
+    image: ghcr.io/kakulukia/bitfeed-remix-server:sha-2dc9af02aeeb4d71b4e114f5d531c5734042d991@sha256:94c3d4f5d9c098ac96e0b756f51da3382a67bf53a4654936901a6793a5b62bf8
     user: "1000:1000"
     restart: on-failure
     stop_grace_period: 1m
