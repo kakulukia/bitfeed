@@ -1,10 +1,12 @@
 import config from '../config.js'
+import TxSprite from './TxSprite.js'
 
 export default class TxPoolScene {
-  constructor ({ width, height, unit, padding, controller, heightStore, colorMode }) {
+  constructor ({ width, height, unit, padding, controller, heightStore, leftStore, colorMode }) {
     this.colorMode = colorMode || "age"
     this.maxHeight = 0
     this.heightStore = heightStore
+    this.leftStore = leftStore
     this.sceneType = 'pool'
     this.init({ width, height, unit, padding, controller })
   }
@@ -44,6 +46,7 @@ export default class TxPoolScene {
 
     this.scene.offset.x = (window.innerWidth - (this.blockWidth * this.gridSize)) / 2
     this.scene.offset.y = (window.innerHeight - (this.blockHeight * this.gridSize)) / 2
+    if (this.leftStore) this.leftStore.set(this.scene.offset.x)
   }
 
   setColorMode (mode) {
@@ -184,18 +187,108 @@ export default class TxPoolScene {
     this.scroll(this.heightLimit - bottom)
   }
 
+  entryAnimation (tx, insertDelay=0) {
+    const weight = Math.min(1, tx.pixelPosition.r / 22)
+    const spawnTopTwoThirds = window.innerHeight * 2 / 3
+    const spawnX = Math.random() * window.innerWidth
+    const spawnY = window.innerHeight - (Math.random() * spawnTopTwoThirds)
+    const growRadius = tx.screenPosition.r * 0.3
+
+    return {
+      start: {
+        x: spawnX,
+        y: spawnY,
+        r: 0
+      },
+      grow: {
+        x: spawnX,
+        y: spawnY,
+        r: growRadius
+      },
+      delay: insertDelay + (Math.random() * 2200),
+      growDuration: 900 + (Math.random() * 500),
+      duration: 1600 + ((1 - weight) * 450) + (Math.random() * 450)
+    }
+  }
+
+  clearEntryTrail (tx) {
+    if (!tx || !tx.entryTrail) return
+    tx.entryTrail.timers.forEach(timer => clearTimeout(timer))
+    tx.entryTrail.sprites.forEach(sprite => sprite.destroy())
+    tx.entryTrail = null
+  }
+
+  clearEntryTrails () {
+    Object.values(this.txs).forEach(tx => this.clearEntryTrail(tx))
+    Object.values(this.hiddenTxs).forEach(tx => this.clearEntryTrail(tx))
+  }
+
+  createEntryTrail (tx, txColor, entry) {
+    if (!this.controller.showGhostTrails) return
+    const vertexArray = this.controller.trailVertexArray
+    if (!vertexArray || !tx.screenPosition.r) return
+
+    this.clearEntryTrail(tx)
+    tx.entryTrail = { sprites: [], timers: [] }
+
+    const schedule = (callback, delay) => {
+      const timer = setTimeout(() => {
+        if (!tx.entryTrail) return
+        tx.entryTrail.timers = tx.entryTrail.timers.filter(item => item !== timer)
+        callback()
+      }, delay)
+      tx.entryTrail.timers.push(timer)
+    }
+
+    for (let i = 0; i < 3; i++) {
+      const lag = 90 + (i * 105)
+      const alpha = 0.16 - (i * 0.035)
+      const radius = Math.max(1, tx.screenPosition.r * (0.9 - (i * 0.12)))
+
+      schedule(() => {
+        if (!this.txs[tx.id] || !tx.view || !tx.view.initialised) return
+        const sprite = new TxSprite({
+          x: entry.grow.x,
+          y: entry.grow.y,
+          r: Math.max(1, entry.grow.r * 0.8),
+          h: txColor.color.h,
+          l: txColor.color.l,
+          alpha
+        }, vertexArray)
+        tx.entryTrail.sprites.push(sprite)
+        sprite.update({
+          x: tx.screenPosition.x,
+          y: tx.screenPosition.y,
+          r: radius,
+          duration: entry.duration + (i * 140),
+          delay: 0,
+          smooth: true
+        })
+        schedule(() => {
+          if (!tx.entryTrail || !tx.entryTrail.sprites.includes(sprite)) return
+          sprite.update({
+            alpha: 0,
+            duration: 420,
+            delay: 0,
+            smooth: true
+          })
+        }, Math.max(300, entry.duration * 0.55))
+      }, entry.delay + entry.growDuration + lag)
+    }
+
+    schedule(() => this.clearEntryTrail(tx), entry.delay + entry.growDuration + entry.duration + 1000)
+  }
+
   setTxOnScreen (tx, insertDelay=0) {
     this.saveGridToPixelPosition(tx)
     this.savePixelsToScreenPosition(tx)
     if (!tx.view.initialised) {
       const txColor = tx.getColor(this.sceneType, this.colorMode)
+      const entry = this.entryAnimation(tx, insertDelay)
+      const start = performance.now()
       tx.view.update({
         display: {
-          position: this.pixelsToScreen({
-            x: tx.pixelPosition.x,
-            y: window.innerHeight + 10,
-            r: this.unitWidth / 2
-          }),
+          position: entry.start,
           color: {
             ...txColor.color,
             alpha: 1
@@ -204,15 +297,49 @@ export default class TxPoolScene {
         delay: 0,
         state: 'ready'
       })
+      this.createEntryTrail(tx, txColor, entry)
       tx.view.update({
         display: {
-          position: tx.screenPosition,
-          color: txColor.color
+          position: entry.grow
         },
-        duration: 2500,
-        delay: insertDelay,
+        start,
+        duration: entry.growDuration,
+        delay: entry.delay,
+        smooth: true,
         state: 'pool'
       })
+      // TxSprite stores one transition per attribute, so later phases must be scheduled after initial growth.
+      setTimeout(() => {
+        if (!this.txs[tx.id] || !tx.view || !tx.view.initialised) return
+        this.saveGridToPixelPosition(tx)
+        this.savePixelsToScreenPosition(tx)
+        tx.view.update({
+          display: {
+            position: tx.screenPosition
+          },
+          duration: entry.duration,
+          delay: 0,
+          smooth: true,
+          state: 'pool'
+        })
+        setTimeout(() => {
+          if (!this.txs[tx.id] || !tx.view || !tx.view.initialised) return
+          this.saveGridToPixelPosition(tx)
+          this.savePixelsToScreenPosition(tx)
+          tx.view.update({
+            display: {
+              position: {
+                r: tx.screenPosition.r * 1.18
+              }
+            },
+            duration: 220,
+            delay: 0,
+            smooth: true,
+            boomerang: true,
+            state: 'pool'
+          })
+        }, entry.duration)
+      }, entry.delay + entry.growDuration)
       if (txColor.endColor) {
         tx.view.update({
           display: {
@@ -284,7 +411,9 @@ export default class TxPoolScene {
   }
 
   remove (id) {
-    let exists = !!this.txs[id]
+    const tx = this.txs[id]
+    let exists = !!tx
+    this.clearEntryTrail(tx)
     delete this.txs[id]
     return exists
   }

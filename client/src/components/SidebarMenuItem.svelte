@@ -87,6 +87,7 @@ async function focusOut(e) {
     <span class="label">{ label }</span>
     <Pill active={value} left={falseLabel} right={trueLabel} />
   {:else if type === 'dropdown'}
+    <span class="label">{ label }</span>
     <div class="select" on:focusin={focusIn} on:focusOut={focusOut}>
       <Select items={ options } value={selectedOption} isSearchable={true} isClearable={false} itemFilter={filterSelectItems} placeholder={label} on:select={onSelect} showIndicator={true} />
     </div>

@@ -1,0 +1,143 @@
+<script>
+import { onMount } from 'svelte'
+import { priceChartChange, settings } from '../stores.js'
+
+export let focused = false
+
+const chartWidth = 1000
+const chartHeight = 320
+const padding = 20
+const refreshMs = 5 * 60 * 1000
+
+let loadedKey = null
+let points = []
+let path = ''
+let chartTrend = 'good'
+
+$: currency = ($settings.currency || 'USD').toLowerCase()
+$: mode = $settings.priceChartMode || '30d'
+$: loadKey = `${currency}:${mode}`
+$: if (mode !== 'none' && loadedKey !== loadKey) loadPrices(currency, mode, loadKey)
+$: updateChart(points)
+
+onMount(() => {
+  const timer = setInterval(() => {
+    if (mode !== 'none') loadPrices(currency, mode, loadKey)
+  }, refreshMs)
+  return () => clearInterval(timer)
+})
+
+async function loadPrices (targetCurrency, targetMode, targetKey) {
+  const keyChanged = loadedKey !== targetKey
+  loadedKey = targetKey
+  if (keyChanged) points = []
+
+  try {
+    const params = new URLSearchParams({
+      vs_currency: targetCurrency,
+      days: targetMode === '1d' ? '1' : '30'
+    })
+    if (targetMode === '30d') params.set('interval', 'daily')
+
+    const response = await fetch(`https://api.coingecko.com/api/v3/coins/bitcoin/market_chart?${params}`)
+    if (!response.ok) throw new Error(`HTTP ${response.status}`)
+
+    const data = await response.json()
+    if (targetKey !== loadKey) return
+
+    points = (data.prices || [])
+      .map(([time, price]) => ({ time, price }))
+      .filter(point => Number.isFinite(point.price))
+  } catch (error) {
+    if (targetKey === loadKey) console.log('error loading price chart: ', error)
+  }
+}
+
+function updateChart (data) {
+  if (data.length < 2) {
+    path = ''
+    chartTrend = 'good'
+    $priceChartChange = null
+    return
+  }
+
+  const firstPrice = data[0].price
+  const lastPrice = data[data.length - 1].price
+  const percent = ((lastPrice - firstPrice) / firstPrice) * 100
+  chartTrend = lastPrice >= firstPrice ? 'good' : 'bad'
+  $priceChartChange = {
+    currency,
+    mode,
+    percent: Math.round(percent),
+    trend: chartTrend
+  }
+
+  const prices = data.map(point => point.price)
+  const min = Math.min(...prices)
+  const max = Math.max(...prices)
+  const range = max - min || 1
+  const xStep = (chartWidth - padding * 2) / (data.length - 1)
+  const coords = data.map((point, index) => {
+    const x = padding + index * xStep
+    const y = chartHeight - padding - ((point.price - min) / range) * (chartHeight - padding * 2)
+    return `${x.toFixed(2)},${y.toFixed(2)}`
+  })
+
+  path = `M${coords.join(' L')}`
+}
+</script>
+
+<style type="text/scss">
+  .price-chart-background {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0.28;
+  }
+
+  svg {
+    width: 112vw;
+    height: 58vh;
+    transform: translateX(-6vw);
+    overflow: visible;
+  }
+
+  path {
+    fill: none;
+    stroke-linejoin: round;
+    stroke-linecap: round;
+  }
+
+  path.good {
+    stroke: var(--palette-good);
+  }
+
+  path.bad {
+    stroke: var(--palette-bad);
+  }
+
+  .glow {
+    stroke-width: 44;
+    opacity: 0.4;
+    filter: blur(20px);
+    transition: filter 900ms ease, opacity 900ms ease, stroke-width 900ms ease;
+  }
+
+  .focused .glow {
+    stroke-width: 11;
+    opacity: 1;
+    filter: blur(5px);
+  }
+</style>
+
+{#if mode !== 'none' && path}
+  <div class="price-chart-background" class:focused data-points={points.length} aria-hidden="true">
+    <svg viewBox={`0 0 ${chartWidth} ${chartHeight}`}>
+      <path class="glow {chartTrend}" d={path} />
+    </svg>
+  </div>
+{/if}

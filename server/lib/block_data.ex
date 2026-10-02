@@ -12,17 +12,59 @@ defmodule BitcoinStream.BlockData do
   use GenServer
   use Task, restart: :transient
 
+  alias BitcoinStream.RPC, as: RPC
+
   def start_link(opts) do
     Logger.info("Starting block data link");
-    # load block
+    GenServer.start_link(__MODULE__, load_state(), opts)
+  end
 
-    with {:ok, json} <- File.read("data/last_block.json"),
-         {:ok, %{"id" => id}} <- Jason.decode(json) do
-      GenServer.start_link(__MODULE__, {id, json}, opts)
-    else
-      _ -> GenServer.start_link(__MODULE__, {nil, "null"}, opts)
+  @doc false
+  def load_state(read_cache \\ &read_cached_block/0, fetch_hash \\ &fetch_tip_hash/0) do
+    case read_cache.() do
+      {:ok, json} ->
+        case state_from_json(json) do
+          {:ok, state} -> state
+          _ -> state_from_tip(fetch_hash)
+        end
+
+      _ -> state_from_tip(fetch_hash)
     end
   end
+
+  @doc false
+  def state_from_json(json) do
+    with {:ok, block} <- Jason.decode(json),
+         id when is_binary(id) and id != "" <- block_id(block) do
+      {:ok, {id, json}}
+    else
+      _ -> :error
+    end
+  end
+
+  defp read_cached_block do
+    File.read("data/last_block.json")
+  end
+
+  defp state_from_tip(fetch_hash) do
+    case fetch_hash.() do
+      {:ok, hash} -> {hash, "null"}
+      _ -> {nil, "null"}
+    end
+  end
+
+  defp fetch_tip_hash do
+    case RPC.request(:rpc, "getbestblockhash", []) do
+      {:ok, 200, hash} when is_binary(hash) -> {:ok, hash}
+      err ->
+        Logger.info("Starting without cached block id: #{inspect(err)}")
+        :error
+    end
+  end
+
+  defp block_id(%{"id" => id}), do: id
+  defp block_id([_, id | _]), do: id
+  defp block_id(_), do: nil
 
   @impl true
   def init(state) do

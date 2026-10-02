@@ -138,7 +138,8 @@ async function fetchTx (txid) {
 }
 
 async function fetchBlockByHash (hash) {
-  if (!hash || (currentBlockVal && hash === currentBlockVal.id)) return true
+  if (!hash) return true
+  if (currentBlockVal && hash === currentBlockVal.id) return currentBlockVal
   // try to fetch static block
   console.log('downloading block', hash)
   let response = await fetch(`${api.uri}/api/block/${hash}`, {
@@ -179,6 +180,7 @@ async function fetchBlockByHeight (height) {
     throw new Error(response.status)
   }
 }
+export {fetchBlockByHeight as fetchBlockByHeight}
 
 async function fetchSpends (txid) {
   if (txid == null) return

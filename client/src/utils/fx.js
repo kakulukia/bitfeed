@@ -239,7 +239,6 @@ export function formatCurrency (code, amount, params) {
   const currency = currencies[code] || currencies.USD
   let parts = [currency.char]
   if (params && params.compact) {
-    let compacted = amount
     let suffixIndex = 0
     while (amount > 1000 && suffixIndex < 4) {
       amount /= 1000
@@ -249,7 +248,9 @@ export function formatCurrency (code, amount, params) {
     if (suffixIndex == 0 && amount >= 10 && amount < 100) precision = 4
     else precision = 3
 
-    const amountPart = amount < 1000 ? amount.toPrecision(precision) : Math.round(amount)
+    const amountPart = amount < 1000
+      ? amount.toLocaleString(undefined, { minimumSignificantDigits: precision, maximumSignificantDigits: precision })
+      : Math.round(amount).toLocaleString()
     parts.push(`${amountPart}${['','K','M','B','T'][suffixIndex]}`)
   } else {
     parts.push(amount.toLocaleString(undefined, { minimumFractionDigits: currency.dp, maximumFractionDigits: currency.dp }))

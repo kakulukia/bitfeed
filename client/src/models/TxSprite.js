@@ -29,9 +29,7 @@ function interpolateAttributeStart(attribute, now, modular) {
         delta = 2 - delta
       }
     }
-    if (attribute.e) {
-      delta = smootherstep(delta)
-    }
+    if (attribute.e) delta = attribute.e === 'in' ? delta * delta * delta : smootherstep(delta)
     if (modular && Math.abs(attribute.a - attribute.b) > 0.5) {
       if (attribute.a > 0.5) {
         attribute.a -= 1
@@ -51,9 +49,10 @@ function interpolateAttributeStart(attribute, now, modular) {
 
 export default class TxSprite {
 
-  constructor({ now = performance.now(), x, y, r, h, l, alpha }, vertexArray) {
+  constructor({ now = performance.now(), x, y, r, h, l, alpha }, vertexArray, counted = true) {
     const offsetTime = now
     this.vertexArray = vertexArray
+    this.counted = counted
     this.vertexData = Array(VI.length).fill(0)
     this.updateMap = {
       x: 0, y: 0, r: 0, h: 0, l: 0, a: 0
@@ -71,7 +70,7 @@ export default class TxSprite {
     // Used to temporarily modify the sprite, so that the base view can be resumed later
     this.modAttributes = null
 
-    this.vertexPointer = this.vertexArray.insert(this)
+    this.vertexPointer = this.vertexArray.insert(this, counted)
 
     this.compile()
   }
@@ -99,7 +98,7 @@ export default class TxSprite {
         attributes[key].b = updateMap[key]
 
         if (!adjust || !inProgress) {
-          if (smooth) attributes[key].e = true
+          if (smooth) attributes[key].e = smooth
           else if (!smooth && attributes[key].e) delete attributes[key].e
           if (boomerang) attributes[key].boom = true
           else if (!boomerang && attributes[key].boom) delete attributes[key].boom
@@ -135,6 +134,28 @@ export default class TxSprite {
     }
 
     this.compile()
+  }
+
+  getDisplay (now = performance.now()) {
+    const attributes = this.modAttributes ? {
+      ...this.attributes,
+      ...this.modAttributes
+    } : this.attributes
+
+    const current = {}
+    for (const key of Object.keys(this.attributes)) {
+      const attribute = { ...attributes[key] }
+      interpolateAttributeStart(attribute, now, key === 'h')
+      current[key] = attribute.a
+    }
+    return {
+      x: current.x,
+      y: current.y,
+      r: current.r,
+      h: current.h,
+      l: current.l,
+      alpha: current.a
+    }
   }
 
   // Transition from modified state back to base attributes
@@ -203,8 +224,14 @@ export default class TxSprite {
     this.vertexPointer = index
   }
 
+  bringToFront () {
+    if (this.vertexArray && this.vertexPointer != null && this.vertexArray.moveToFront) {
+      this.vertexArray.moveToFront(this.vertexPointer)
+    }
+  }
+
   destroy () {
-    this.vertexArray.remove(this.vertexPointer)
+    this.vertexArray.remove(this.vertexPointer, this.counted)
     this.vertexPointer = null
   }
 }

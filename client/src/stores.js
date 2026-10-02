@@ -1,8 +1,6 @@
 import { writable, derived } from 'svelte/store'
 import { tweened } from 'svelte/motion';
 import { makePollStore } from './utils/pollStore.js'
-import LocaleCurrency from 'locale-currency'
-import { currencies } from './utils/fx.js'
 import config from './config.js'
 
 function createCounter () {
@@ -54,6 +52,7 @@ function createCachedDict (namespace, setValues, defaultValues) {
 
 // refresh exchange rates every minute
 export const exchangeRates = makePollStore('rates', 'https://blockchain.info/ticker', 60000, {})
+export const priceChartChange = writable(null)
 // refresh messages from donation server every hour
 export const alerts =  config.messagesEnabled ? makePollStore('alerts', `${config.donationRoot}/api/sponsorship/msgs.json`, 3600000, []) : writable(null)
 // refresh sponsor data every 10 minutes
@@ -85,8 +84,10 @@ export const devEvents = writable({
 
 export const txCount = createCounter()
 export const lastBlockId = writable(null)
+export const replayBlockTrigger = createCounter()
 export const mempoolCount = tweened(0)
 export const mempoolScreenHeight = writable(0)
+export const mempoolScreenLeft = writable(0)
 export const blockVisible = writable(false)
 export const currentBlock = writable(null)
 export const selectedTx = writable(null)
@@ -95,18 +96,17 @@ export const blockAreaSize = writable(0)
 
 export const settingsOpen = writable(false)
 
-let localeCurrencyCode = LocaleCurrency.getCurrency(navigator.language)
-if (!currencies[localeCurrencyCode]) localeCurrencyCode = 'USD'
-
 const defaultSettings = {
 	darkMode: true,
 	showNetworkStatus: true,
-	currency: localeCurrencyCode,
+	currency: 'USD',
 	showFX: true,
+	priceChartMode: '30d',
 	vbytes: false,
-	colorByFee: false,
-	showMessages: true,
-	showSearch: true,
+	colorByFee: true,
+	showGhostTrails: true,
+	showMessages: false,
+	showSearch: false,
 	noTrack: false,
 	blocksEnabled: true
 }
@@ -121,7 +121,6 @@ const urlSettings = Object.keys(defaultSettings).reduce((map, key) => {
 
 	return map
 }, {})
-if (urlSettings.showMessages == null) urlSettings.showMessages = true
 if (urlSettings.blocksEnabled == null) urlSettings.blocksEnabled = true
 
 export const settings = createCachedDict('settings', urlSettings, defaultSettings)
@@ -143,11 +142,14 @@ export const overlay = writable(null)
 
 export const highlight = writable([])
 export const newHighlightQuery = writable(null)
+export const removeHighlightQuery = writable(null)
+export const focusTx = writable(null)
 export const highlightingFull = writable(false)
 
 export const pageWidth = writable(window.innerWidth)
 export const pageHeight = writable(window.innerHeight)
 export const freezeResize = writable(false)
+export const fullscreenActive = writable(false)
 
 let lastTinyScreen
 export const tinyScreen = derived([pageWidth, pageHeight, freezeResize], ([$pageWidth, $pageHeight, $freezeResize]) => {

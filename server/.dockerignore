@@ -1,0 +1,14 @@
+_build
+deps
+cover
+doc
+data
+tmp
+log/*
+!log/.gitkeep
+bitcoinex/_build
+bitcoinex/deps
+.env*
+.envrc
+erl_crash.dump
+.DS_Store

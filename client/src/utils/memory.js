@@ -28,10 +28,12 @@ export class FastVertexArray {
     // console.log(this.data)
   }
 
-  insert (sprite) {
+  insert (sprite, counted = true) {
     // console.log('inserting into FVA')
-    this.count++
-    if (this.counter) this.counter.increment()
+    if (counted) {
+      this.count++
+      if (this.counter) this.counter.increment()
+    }
 
     let position
     if (this.freeSlots.length) {
@@ -48,9 +50,11 @@ export class FastVertexArray {
     return position
   }
 
-  remove (index) {
-    this.count--
-    if (this.counter) this.counter.decrement()
+  remove (index, counted = true) {
+    if (counted) {
+      this.count--
+      if (this.counter) this.counter.decrement()
+    }
     this.setData(index, this.nullSprite)
     this.freeSlots.push(index)
     this.sprites[index] = null
@@ -62,6 +66,64 @@ export class FastVertexArray {
     // console.log(`Updating chunk at ${index} (${index * this.stride})`)
     this.data.set(dataChunk, (index * this.stride))
     // this.print()
+  }
+
+  moveToFront (index) {
+    const sprite = this.sprites[index]
+    if (!sprite) return index
+
+    let target = this.lastSlot - 1
+    while (target > index && !this.sprites[target]) target--
+    if (target <= index) return index
+
+    const other = this.sprites[target]
+    this.sprites[target] = sprite
+    this.sprites[index] = other
+    sprite.moveVertexPointer(target)
+    other.moveVertexPointer(index)
+    sprite.compile()
+    other.compile()
+    return target
+  }
+
+  moveGroupToFront (sprites) {
+    const group = sprites.filter(sprite => (
+      sprite &&
+      sprite.vertexPointer != null &&
+      this.sprites[sprite.vertexPointer] === sprite
+    ))
+    if (!group.length) return null
+
+    const groupSet = new Set(group)
+    const targetSlots = []
+    for (let index = this.lastSlot - 1; index >= 0 && targetSlots.length < group.length; index--) {
+      if (this.sprites[index]) targetSlots.unshift(index)
+    }
+
+    const targetSet = new Set(targetSlots)
+    const sourceSlots = group.map(sprite => sprite.vertexPointer)
+    const displaced = targetSlots
+      .map(slot => this.sprites[slot])
+      .filter(sprite => sprite && !groupSet.has(sprite))
+    const vacatedSlots = sourceSlots.filter(slot => !targetSet.has(slot))
+    if (displaced.length !== vacatedSlots.length) return null
+
+    const moves = [
+      ...displaced.map((sprite, index) => [sprite, vacatedSlots[index]]),
+      ...group.map((sprite, index) => [sprite, targetSlots[index]])
+    ]
+
+    moves.forEach(([sprite, slot]) => {
+      this.sprites[slot] = sprite
+    })
+    moves.forEach(([sprite, slot]) => {
+      if (sprite.vertexPointer !== slot) {
+        sprite.moveVertexPointer(slot)
+        sprite.compile()
+      }
+    })
+
+    return targetSlots[targetSlots.length - 1]
   }
 
   getData (index) {

@@ -5,10 +5,10 @@
   import { createEventDispatcher } from 'svelte'
   import Icon from '../components/Icon.svelte'
   import closeIcon from '../assets/icon/cil-x-circle.svg'
-  import { shortBtcFormat, longBtcFormat, dateFormat, numberFormat } from '../utils/format.js'
-  import { exchangeRates, settings, blocksEnabled, latestBlockHeight, blockTransitionDirection, loading, freezeResize, pageWidth, pageHeight } from '../stores.js'
+  import { shortBtcFormat, longBtcFormat, dateFormat, numberFormat, feeRateFormat } from '../utils/format.js'
+  import { exchangeRates, settings, blocksEnabled, latestBlockHeight, blockTransitionDirection, loading, freezeResize, fullscreenActive, pageWidth, pageHeight, overlay, explorerBlock, urlPath } from '../stores.js'
   import { formatCurrency } from '../utils/fx.js'
-  import { searchBlockHeight } from '../utils/search.js'
+  import { fetchBlockByHeight } from '../utils/search.js'
 
 	const dispatch = createEventDispatcher()
 
@@ -17,8 +17,15 @@
   export let block
   export let visible
   const newBlockDelay = 2000
+  const blockNavigationAnimationMs = 2700 // 200ms delay + 2000ms duration + 500ms jitter
+  const blockNavigationQueueDelayMs = 500
   let restoring = false
   let formattedBlockValue = ''
+  let navigationQueue = []
+  let navigationRunning = false
+  let activeNavigationHeight = null
+  let navigationAnimationUntil = 0
+  let escapePending = false
 
   let compactView
   let landscape
@@ -117,7 +124,7 @@
 
   function formatFee (n) {
     if (n) {
-      return numberFormat.format(n.toFixed(2))
+      return feeRateFormat.format(n)
     } else return  '0'
   }
 
@@ -130,25 +137,113 @@
     }
   }
 
-  async function explorePrevBlock (e) {
-    e.preventDefault()
-    if (!$loading && block) {
-      loading.increment()
-      await searchBlockHeight(block.height - 1)
+  async function loadNavigationBlock (height) {
+    loading.increment()
+    try {
+      return await fetchBlockByHeight(height)
+    } catch (error) {
+      console.log('error fetching block ', error)
+      return null
+    } finally {
       loading.decrement()
     }
   }
 
-  async function exploreNextBlock (e) {
-    e.preventDefault()
-    if (!$loading && block) {
-      if (block.height + 1 < $latestBlockHeight) {
-        loading.increment()
-        await searchBlockHeight(block.height + 1)
-        loading.decrement()
-      } else {
-        dispatch('quitExploring')
+  function queueBlockNavigation (direction) {
+    if (!block || escapePending) return
+
+    const lastQueued = navigationQueue[navigationQueue.length - 1]
+    const fromHeight = lastQueued ? lastQueued.height : (activeNavigationHeight != null ? activeNavigationHeight : block.height)
+    const height = fromHeight + (direction === 'prev' ? -1 : 1)
+    if (height < 0 || height > $latestBlockHeight) return
+
+    navigationQueue.push({
+      height,
+      blockPromise: height === $latestBlockHeight ? null : loadNavigationBlock(height)
+    })
+    runNavigationQueue()
+  }
+
+  function queueEscape () {
+    navigationQueue = []
+    escapePending = true
+    runNavigationQueue()
+  }
+
+  async function runNavigationQueue () {
+    if (navigationRunning) return
+    navigationRunning = true
+
+    try {
+      while (navigationQueue.length || escapePending) {
+        if (escapePending) {
+          const remainingAnimationMs = navigationAnimationUntil - Date.now()
+          if (remainingAnimationMs > 0) await new Promise(resolve => setTimeout(resolve, remainingAnimationMs))
+          escapePending = false
+          navigationAnimationUntil = 0
+          hideBlock()
+          break
+        }
+
+        const navigation = navigationQueue.shift()
+        activeNavigationHeight = navigation.height
+        const isLatest = navigation.height === $latestBlockHeight
+        const nextBlock = isLatest ? null : await (navigation.blockPromise || loadNavigationBlock(navigation.height))
+
+        if (escapePending) {
+          activeNavigationHeight = null
+          continue
+        }
+
+        if (isLatest) {
+          dispatch('quitExploring')
+        } else if (nextBlock && nextBlock.id) {
+          urlPath.set(`/block/height/${navigation.height}`)
+          overlay.set(null)
+          explorerBlock.set(nextBlock)
+        } else {
+          activeNavigationHeight = null
+          continue
+        }
+
+        navigationAnimationUntil = Date.now() + blockNavigationAnimationMs
+        await new Promise(resolve => setTimeout(resolve, blockNavigationQueueDelayMs))
+        activeNavigationHeight = null
       }
+    } finally {
+      activeNavigationHeight = null
+      navigationRunning = false
+      if (navigationQueue.length || escapePending) runNavigationQueue()
+    }
+  }
+
+  function explorePrevBlock (e) {
+    e.preventDefault()
+    queueBlockNavigation('prev')
+  }
+
+  function exploreNextBlock (e) {
+    e.preventDefault()
+    queueBlockNavigation('next')
+  }
+
+  function isEditableTarget (target) {
+    if (!target) return false
+    const tag = target.tagName
+    return target.isContentEditable || tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT'
+  }
+
+  function handleKeydown (e) {
+    if (!visible || !block || !$blocksEnabled || $overlay || e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey || isEditableTarget(e.target)) return
+    if (e.key === 'Escape') {
+      e.preventDefault()
+      queueEscape()
+    } else if (e.key === 'ArrowLeft' && hasPrevBlock) {
+      e.preventDefault()
+      queueBlockNavigation('prev')
+    } else if (e.key === 'ArrowRight' && hasNextBlock) {
+      e.preventDefault()
+      queueBlockNavigation('next')
     }
   }
 </script>
@@ -167,6 +262,8 @@
     cursor: pointer;
     pointer-events: all;
     font-size: 1.2em;
+    opacity: var(--block-control-opacity, 1);
+    transition: opacity 250ms, top 1000ms, bottom 1000ms, left 1000ms, right 1000ms, margin 1000ms, transform 1000ms;
 
     &.standalone {
       display: none;
@@ -183,7 +280,7 @@
 
   .block-info {
     position: absolute;
-    bottom: calc(100% + 0.25rem);
+    bottom: calc(100% + 1.15rem);
     left: 50%;
     min-width: 100%;
     transform: translateX(-50%);
@@ -191,6 +288,7 @@
 
     color: var(--palette-x);
     font-size: 1rem;
+    transition: top 1000ms, bottom 1000ms, left 1000ms, right 1000ms, transform 1000ms;
 
     @media (max-width: 360px) {
       font-size: 4.4vw;
@@ -234,7 +332,7 @@
         margin: 0;
         padding: 0;
         cursor: pointer;
-        margin-top: -5px;
+        transform: translateY(-.7rem);
       }
 
        &:first-child {
@@ -249,14 +347,16 @@
   .explore-button {
     position: absolute;
     bottom: 10%;
-    padding: .75em;
+    padding: .5em;
     pointer-events: all;
+    opacity: var(--block-control-opacity, 1);
+    transition: opacity 250ms, bottom 1000ms, left 1000ms, right 1000ms;
 
     &.prev {
-      right: 100%
+      right: calc(100% + .7rem);
     }
     &.next {
-      left: 100%;
+      left: calc(100% + .7rem);
     }
 
     .chevron {
@@ -291,11 +391,12 @@
   .block-info.landscape {
     bottom: unset;
     left: unset;
-    top: 0;
-    right: 100%;
-    padding-right: .5rem;
+    top: -4px;
+    right: calc(100% + 1.2rem);
+    padding-right: 0;
 
-    min-width: 0;
+    min-width: 13rem;
+    text-align: right;
     transform: translateX(0);
 
     .data-row {
@@ -310,7 +411,7 @@
     }
 
     .data-field {
-      white-space: wrap;
+      white-space: nowrap;
       margin-left: 0;
       margin-right: 5px;
 
@@ -323,31 +424,40 @@
       }
     }
   }
-
   .standalone.landscape.close-button {
     display: block;
     position: absolute;
-    bottom: 100%;
-    left: 100%;
-    margin: 5px;
+    top: -2px;
+    bottom: unset;
+    left: calc(100% + 1.15rem);
+    margin: 0;
   }
-
   .standalone.tinyscreen.close-button {
     top: 0;
     bottom: unset;
     margin-top: 0;
   }
+
+  .block-info-container.ambient-mode {
+    .close-button,
+    .explore-button {
+      opacity: 0;
+      pointer-events: none;
+    }
+  }
 </style>
+
+<svelte:window on:keydown={handleKeydown} />
 
 {#key transitionDirection}
   {#each ((block != null && visible && $blocksEnabled) ? [block] : []) as block (block.id)}
-    <div class="block-info-container" out:fly|local={flyOut} in:fly|local={flyIn}>
+    <div class="block-info-container" class:ambient-mode={$fullscreenActive} out:fly|local={flyOut} in:fly|local={flyIn}>
       <div class="block-info" class:compact={compactView} class:landscape={landscape}>
           <!-- <span class="data-field">Hash: { block.id }</span> -->
           <div class="full-size">
             <div class="data-row">
               <span class="data-field title-field" title="{block.miner_sig}"><b>{#if block.height == $latestBlockHeight}Latest {/if}Block: </b>{ numberFormat.format(block.height) }</span>
-              <button class="data-field close-button" on:click={hideBlock}><Icon icon={closeIcon} color="var(--palette-x)" /></button>
+              <button class="data-field close-button" on:click={hideBlock} title="Hide block"><Icon icon={closeIcon} color="var(--palette-x)" /></button>
             </div>
             <div class="data-row">
               <span class="data-field" title="block timestamp">{ formatDateTime(block.time) }</span>
@@ -370,7 +480,7 @@
           <div class="compact">
             <div class="data-row">
               <span class="data-field title-field" title="{block.miner_sig}"><b>{#if block.height == $latestBlockHeight}Latest {/if}Block: </b>{ numberFormat.format(block.height) }</span>
-              <button class="data-field close-button" on:click={hideBlock}><Icon icon={closeIcon} color="var(--palette-x)" /></button>
+              <button class="data-field close-button" on:click={hideBlock} title="Hide block"><Icon icon={closeIcon} color="var(--palette-x)" /></button>
             </div>
             <div class="data-row">
               <span class="data-field">{ formatDateTime(block.time) }</span>

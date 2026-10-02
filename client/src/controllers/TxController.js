@@ -6,17 +6,21 @@ import BitcoinBlock from '../models/BitcoinBlock.js'
 import TxSprite from '../models/TxSprite.js'
 import { FastVertexArray } from '../utils/memory.js'
 import { searchTx, fetchSpends, addSpends } from '../utils/search.js'
-import { overlay, txCount, mempoolCount, mempoolScreenHeight, blockVisible, currentBlock, selectedTx, detailTx, blockAreaSize, highlight, colorMode, blocksEnabled, latestBlockHeight, explorerBlock, blockTransitionDirection, loading, urlPath } from '../stores.js'
+import { highlightE } from '../utils/color.js'
+import { overlay, txCount, mempoolCount, mempoolScreenHeight, mempoolScreenLeft, blockVisible, currentBlock, selectedTx, detailTx, blockAreaSize, highlight, focusTx, colorMode, settings, blocksEnabled, latestBlockHeight, explorerBlock, blockTransitionDirection, loading, urlPath } from '../stores.js'
 import config from "../config.js"
 import { tick } from 'svelte';
+
+const nextFrame = () => new Promise(resolve => requestAnimationFrame(resolve))
 
 export default class TxController {
   constructor ({ width, height }) {
     this.vertexArray = new FastVertexArray(2048, TxSprite.dataSize, txCount)
+    this.trailVertexArray = new FastVertexArray(512, TxSprite.dataSize)
     this.debugVertexArray = new FastVertexArray(1024, TxSprite.dataSize)
     this.txs = {}
     this.expiredTxs = {}
-    this.poolScene = new TxMondrianPoolScene({ width, height, controller: this, heightStore: mempoolScreenHeight })
+    this.poolScene = new TxMondrianPoolScene({ width, height, controller: this, heightStore: mempoolScreenHeight, leftStore: mempoolScreenLeft })
     this.blockAreaSize = (width <= 620) ? Math.min(window.innerWidth * 0.7, window.innerHeight / 2.75) : Math.min(window.innerWidth * 0.75, window.innerHeight / 2.5)
     blockAreaSize.set(this.blockAreaSize)
     this.blockScene = null
@@ -33,8 +37,13 @@ export default class TxController {
 
     this.lastTxTime = 0
     this.txDelay = 0
+    this.showGhostTrails = true
 
     this.blocksEnabled = true
+    settings.subscribe(value => {
+      this.showGhostTrails = value.showGhostTrails !== false
+      if (!this.showGhostTrails) this.poolScene.clearEntryTrails()
+    })
     blocksEnabled.subscribe(enabled => {
       this.blocksEnabled = enabled
     })
@@ -44,6 +53,12 @@ export default class TxController {
     highlight.subscribe(criteria => {
       this.highlightCriteria = criteria
       this.applyHighlighting()
+    })
+    focusTx.subscribe(txid => {
+      if (txid) {
+        this.focusTx(txid)
+        focusTx.set(null)
+      }
     })
     colorMode.subscribe(mode => {
       this.setColorMode(mode)
@@ -58,7 +73,14 @@ export default class TxController {
   }
 
   getVertexData () {
-    return this.vertexArray.getVertexData()
+    const vertexData = this.vertexArray.getVertexData()
+    if (!this.trailVertexArray.count) return vertexData
+
+    const trailData = this.trailVertexArray.getVertexData()
+    const combined = new Float32Array(vertexData.length + trailData.length)
+    combined.set(vertexData)
+    combined.set(trailData, vertexData.length)
+    return combined
   }
 
   getDebugVertexData () {
@@ -108,6 +130,10 @@ export default class TxController {
     }
   }
 
+  focusTx (txid) {
+    if (this.txs[txid]) this.txs[txid].focusPulse()
+  }
+
   addTx (txData) {
     const tx = new BitcoinTx(txData, this.vertexArray)
     tx.applyHighlighting(this.highlightCriteria)
@@ -127,23 +153,44 @@ export default class TxController {
   }
 
   dropTx (txid) {
-    if (this.txs[txid] && this.poolScene.drop(txid)) {
-      this.txs[txid].view.update({
+    const tx = this.txs[txid]
+    if (tx && this.poolScene.drop(txid)) {
+      const radius = tx.screenPosition.r
+      const warningColor = {
+        h: highlightE.h + ((Math.random() - 0.5) * 0.04),
+        l: highlightE.l + ((Math.random() - 0.5) * 0.08)
+      }
+      tx.hoverOff()
+      tx.highlightOff()
+      tx.view.destroyLens()
+      if (this.selectedTx === tx) {
+        this.selectedTx = null
+        selectedTx.set(null)
+      }
+      tx.view.update({
         display: {
-          position: {
-            y: -100, //this.txs[txid].screenPosition.y - 100
-          },
-          // color: {
-          //   alpha: 0
-          // }
+          color: warningColor
         },
         delay: 0,
-        duration: 2000
+        duration: 1500,
+        smooth: 'in'
+      })
+      tx.view.update({
+        display: {
+          position: {
+            r: Math.min(Math.max(radius * 3, radius + 12), radius + 48)
+          },
+          color: {
+            alpha: 0
+          }
+        },
+        delay: 1200,
+        duration: 900,
+        smooth: true
       })
       setTimeout(() => {
         this.destroyTx(txid)
-      }, 2000)
-      // this.poolScene.layoutAll()
+      }, 2100)
     }
   }
 
@@ -284,7 +331,7 @@ export default class TxController {
 
   async exploreBlock (block) {
     if (this.block && this.block.id === block.id) {
-      this.showBlock()
+      await this.resumeLatest({ updateUrl: false })
       return
     }
 
@@ -295,19 +342,20 @@ export default class TxController {
       const prevBlock = this.explorerBlock
       const prevBlockScene = this.explorerBlockScene
       if (prevBlock.height < block.height) {
-        prevBlockScene.exitLeft()
+        await prevBlockScene.exitAsync(false)
         enterFromRight = true
       }
-      else prevBlockScene.exitRight()
+      else await prevBlockScene.exitAsync(true)
       prevBlockScene.expire(3000)
     } else if (this.blockScene) {
-      this.blockScene.exitRight()
+      await this.blockScene.exitAsync(true)
     }
 
     this.explorerBlock = block
 
     if (this.blocksEnabled) {
-      this.explorerBlockScene = new TxBlockScene({ width: this.blockAreaSize, height: this.blockAreaSize, blockId: block.id, controller: this, colorMode: this.colorMode })
+      const explorerBlockScene = new TxBlockScene({ width: this.blockAreaSize, height: this.blockAreaSize, blockId: block.id, controller: this, colorMode: this.colorMode })
+      this.explorerBlockScene = explorerBlockScene
       for (let i = 0; i < block.txns.length; i++) {
         const tx = new BitcoinTx({
           ...block.txns[i],
@@ -315,17 +363,17 @@ export default class TxController {
         }, this.vertexArray)
         this.txs[tx.id] = tx
         this.txs[tx.id].applyHighlighting(this.highlightCriteria)
-        this.explorerBlockScene.insert(tx, 0, false)
+        explorerBlockScene.insert(tx, 0, false)
       }
-      this.explorerBlockScene.prepareAll()
-      this.explorerBlockScene.layoutAll()
-      if (enterFromRight) {
-        blockTransitionDirection.set('right')
-        this.explorerBlockScene.enterRight()
-      } else {
-        blockTransitionDirection.set('left')
-        this.explorerBlockScene.enterLeft()
-      }
+
+      await nextFrame()
+      explorerBlockScene.prepareAll()
+      await nextFrame()
+      explorerBlockScene.layoutAll()
+      await nextFrame()
+
+      blockTransitionDirection.set(enterFromRight ? 'right' : 'left')
+      await explorerBlockScene.enterAsync(enterFromRight)
     }
 
     blockVisible.set(true)
@@ -333,7 +381,7 @@ export default class TxController {
     currentBlock.set(block)
   }
 
-  async resumeLatest () {
+  async resumeLatest ({ updateUrl = true } = {}) {
     if (this.explorerBlock && this.explorerBlockScene) {
       const prevBlock = this.explorerBlock
       const prevBlockScene = this.explorerBlockScene
@@ -341,7 +389,7 @@ export default class TxController {
       prevBlockScene.expire(3000)
       this.explorerBlockScene = null
       this.explorerBlock = null
-      urlPath.set("/")
+      if (updateUrl) urlPath.set("/")
     }
     if (this.blockScene && this.block) {
       blockTransitionDirection.set('right')
@@ -363,6 +411,19 @@ export default class TxController {
     if (this.blockScene && !this.explorerBlockScene) {
       this.blockScene.show()
     }
+  }
+
+  replayLatestBlock () {
+    if (this.blockScene && !this.explorerBlockScene) {
+      blockTransitionDirection.set(null)
+      blockVisible.set(true)
+      this.blockScene.replayBuild()
+    }
+  }
+
+  setBlockOpacity (opacity, duration) {
+    if (this.blockScene) this.blockScene.setOpacity(opacity, duration)
+    if (this.explorerBlockScene) this.explorerBlockScene.setOpacity(opacity, duration)
   }
 
   clearBlock () {
@@ -395,23 +456,31 @@ export default class TxController {
       if (selected !== this.selectedTx) {
         if (this.selectedTx) this.selectedTx.hoverOff()
         if (selected) selected.hoverOn()
+      } else if (selected) {
+        selected.hoverRefresh()
       }
       this.selectedTx = selected
       selectedTx.set(this.selectedTx)
     }
   }
 
-  async mouseClick (position) {
+  async mouseClick (position, drop = false) {
     if (this.poolScene) {
       let selected = this.poolScene.selectAt(position)
       if (!selected && this.blockScene && !this.explorerBlock && !this.blockScene.hidden) selected = this.blockScene.selectAt(position)
       if (!selected && this.explorerBlockScene && this.explorerBlock && !this.explorerBlockScene.hidden) selected = this.explorerBlockScene.selectAt(position)
+      if (drop && selected && selected.state === 'pool') {
+        this.dropTx(selected.id)
+        return
+      }
 
       let sameTx = true
       if (selected !== this.selectedTx) {
         sameTx = false
         if (this.selectedTx) this.selectedTx.hoverOff()
         if (selected) selected.hoverOn()
+      } else if (selected) {
+        selected.hoverRefresh()
       }
       this.selectedTx = selected
       selectedTx.set(selected)

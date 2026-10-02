@@ -19,6 +19,9 @@ export default class TxBlockScene extends TxMondrianPoolScene {
     this.initialised = true
     this.inverted = true
     this.hidden = false
+    this.opacity = 0.21
+    this.building = false
+    this.buildTimers = []
     this.sceneType = 'block'
   }
 
@@ -84,7 +87,10 @@ export default class TxBlockScene extends TxMondrianPoolScene {
       tx.view.update({
         display: {
           position: tx.screenPosition,
-          color: tx.getColor('block', this.colorMode).color
+          color: {
+            ...tx.getColor('block', this.colorMode).color,
+            alpha: 0
+          }
         },
         duration: 0,
         delay: 0,
@@ -94,7 +100,10 @@ export default class TxBlockScene extends TxMondrianPoolScene {
       tx.view.update({
         display: {
           position: tx.screenPosition,
-          color: tx.getColor('block', this.colorMode).color
+          color: {
+            ...tx.getColor('block', this.colorMode).color,
+            alpha: this.building ? 1 : this.opacity
+          }
         },
         duration: this.laidOut ? 1000 : 2000,
         delay: 200,
@@ -105,7 +114,7 @@ export default class TxBlockScene extends TxMondrianPoolScene {
     }
   }
 
-  prepareTxOnScreen (tx, now) {
+  prepareTxOnScreen (tx, now, replay=false) {
     const oldRadius = tx.pixelPosition.r
     this.saveGridToPixelPosition(tx)
     if (!tx.view.initialised) {
@@ -125,6 +134,23 @@ export default class TxBlockScene extends TxMondrianPoolScene {
         state: 'ready'
       })
     } else {
+      const replayPosition = replay ? this.replayStartPosition(tx) : null
+      if (replay && replayPosition) {
+        tx.view.update({
+          display: {
+            position: replayPosition,
+            color: {
+              ...ice(tx.colors[this.colorMode].block.color),
+              alpha: 1
+            }
+          },
+          start: now,
+          delay: 0,
+          duration: 750,
+          smooth: true,
+          state: 'ready'
+        })
+      }
       const jitter = (Math.random() * 1500)
       tx.view.update({
         display: {
@@ -149,9 +175,40 @@ export default class TxBlockScene extends TxMondrianPoolScene {
     }
   }
 
-  prepareTx (tx, sequence) {
+  replayStartPosition (tx) {
+    const radius = Math.max(1, tx.pixelPosition.r || tx.screenPosition.r || 1)
+    const minY = radius + 24
+    const maxY = Math.max(minY, Math.min(window.innerHeight * 0.32, this.scene.offset.y - radius - 24))
+
+    return {
+      x: radius + (Math.random() * Math.max(1, window.innerWidth - (radius * 2))),
+      y: minY + (Math.random() * Math.max(1, maxY - minY)),
+      r: radius
+    }
+  }
+
+  prepareTx (tx, now, replay=false) {
     this.place(tx)
-    this.prepareTxOnScreen(tx)
+    this.prepareTxOnScreen(tx, now, replay)
+  }
+
+  setOpacity (opacity, duration=250) {
+    this.opacity = opacity
+    if (this.hidden || this.building) return
+
+    const ids = this.getActiveTxList()
+    for (let i = 0; i < ids.length; i++) {
+      this.txs[ids[i]].view.update({
+        display: {
+          color: {
+            alpha: opacity
+          }
+        },
+        duration,
+        delay: 0,
+        state: 'block'
+      })
+    }
   }
 
   enterTx (tx, start, right) {
@@ -175,7 +232,7 @@ export default class TxBlockScene extends TxMondrianPoolScene {
         position: tx.screenPosition,
         color: {
           ...tx.getColor('block', this.colorMode).color,
-          alpha: 1
+          alpha: this.opacity
         }
       },
       start,
@@ -196,6 +253,19 @@ export default class TxBlockScene extends TxMondrianPoolScene {
     }
   }
 
+  async enterAsync (right) {
+    this.hidden = false
+    this.exited = false
+    const ids = this.getActiveTxList()
+    const start = performance.now()
+    for (let i = 0; i < ids.length; i++) {
+      this.enterTx(this.txs[ids[i]], start, right)
+      if (i > 0 && i % 1500 === 0) {
+        await new Promise(resolve => requestAnimationFrame(resolve))
+      }
+    }
+  }
+
   enterRight () {
     this.enter(true)
   }
@@ -209,7 +279,7 @@ export default class TxBlockScene extends TxMondrianPoolScene {
       display: {
         position: {
           x: tx.screenPosition.x + (right ? window.innerWidth : -window.innerWidth) + ((Math.random()-0.5) * (window.innerHeight/4)),
-          y: tx.screenPosition.y + ((Math.random()-0.5) * (window.innerHeight/4)),
+          y: tx.screenPosition.y,
           r: tx.pixelPosition.r
         },
         color: {
@@ -232,6 +302,19 @@ export default class TxBlockScene extends TxMondrianPoolScene {
     const start = performance.now()
     for (let i = 0; i < ids.length; i++) {
       this.exitTx(this.txs[ids[i]], start, right)
+    }
+  }
+
+  async exitAsync (right) {
+    this.hidden = true
+    this.exited = true
+    const ids = this.getActiveTxList()
+    const start = performance.now()
+    for (let i = 0; i < ids.length; i++) {
+      this.exitTx(this.txs[ids[i]], start, right)
+      if (i > 0 && i % 1500 === 0) {
+        await new Promise(resolve => requestAnimationFrame(resolve))
+      }
     }
   }
 
@@ -270,7 +353,7 @@ export default class TxBlockScene extends TxMondrianPoolScene {
           y: tx.screenPosition.y
         },
         color: {
-          alpha: 1
+          alpha: this.opacity
         }
       },
       start: now,
@@ -281,7 +364,7 @@ export default class TxBlockScene extends TxMondrianPoolScene {
     })
   }
 
-  prepareAll () {
+  prepareAll (replay=false) {
     const now = performance.now()
     this.resize({})
     this.scene.count = 0
@@ -292,7 +375,7 @@ export default class TxBlockScene extends TxMondrianPoolScene {
     }
     ids = this.getActiveTxList()
     for (let i = 0; i < ids.length; i++) {
-      this.prepareTx(this.txs[ids[i]], now)
+      this.prepareTx(this.txs[ids[i]], now, replay)
     }
   }
 
@@ -303,12 +386,41 @@ export default class TxBlockScene extends TxMondrianPoolScene {
     // }
   }
 
-  initialLayout (exited) {
-    this.prepareAll()
-    setTimeout(() => {
+  clearBuildTimers () {
+    this.buildTimers.forEach(timer => clearTimeout(timer))
+    this.buildTimers = []
+  }
+
+  setBuildTimer (callback, delay) {
+    const timer = setTimeout(() => {
+      this.buildTimers = this.buildTimers.filter(item => item !== timer)
+      callback()
+    }, delay)
+    this.buildTimers.push(timer)
+  }
+
+  build (exited=false, replay=false) {
+    this.clearBuildTimers()
+    this.hidden = false
+    this.laidOut = false
+    this.building = true
+    this.prepareAll(replay)
+    this.setBuildTimer(() => {
       this.layoutAll()
       if (exited) this.exitRight()
+      this.setBuildTimer(() => {
+        this.building = false
+        this.setOpacity(this.opacity, 1200)
+      }, 3900)
     }, 3000)
+  }
+
+  initialLayout (exited) {
+    this.build(exited, false)
+  }
+
+  replayBuild () {
+    this.build(false, true)
   }
 
   resetScroll () {
@@ -336,6 +448,7 @@ export default class TxBlockScene extends TxMondrianPoolScene {
   }
 
   expire (delay=3000) {
+    this.clearBuildTimers()
     this.expired = true
     const txIds = this.getTxList()
     for (let i = 0; i < txIds.length; i++) {

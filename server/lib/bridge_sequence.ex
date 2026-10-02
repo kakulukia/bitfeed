@@ -68,7 +68,8 @@ defmodule BitcoinStream.Bridge.Sequence do
 
   defp send_txn(txn, count) do
     # Logger.info("Forwarding transaction to websocket clients")
-    case Jason.encode(%{type: "txn", txn: txn, count: count}) do
+    vbytes = Mempool.get_vbytes(:mempool)
+    case Jason.encode(%{type: "txn", txn: txn, count: count, vbytes: vbytes}) do
       {:ok, payload} ->
         Registry.dispatch(Registry.BitcoinStream, "txs", fn(entries) ->
           for {pid, _} <- entries do
@@ -80,7 +81,8 @@ defmodule BitcoinStream.Bridge.Sequence do
   end
 
   defp send_drop_tx(txid, count) do
-    case Jason.encode(%{type: "drop", txid: txid, count: count}) do
+    vbytes = Mempool.get_vbytes(:mempool)
+    case Jason.encode(%{type: "drop", txid: txid, count: count, vbytes: vbytes}) do
       {:ok, payload} ->
         Registry.dispatch(Registry.BitcoinStream, "txs", fn(entries) ->
           for {pid, _} <- entries do

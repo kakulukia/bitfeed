@@ -1,0 +1,39 @@
+manifestVersion: 1
+id: kakulukia-bitfeed-remix
+storage:
+  dataRoot: data
+category: bitcoin
+name: Bitfeed Remix
+version: "2.3.4-remix.1"
+tagline: A fresh take on your Bitcoin mempool
+description: >-
+  Watch transactions flow into your Bitcoin node's mempool and explore newly
+  mined blocks. Bitfeed Remix is a community-maintained fork of Mononaut's
+  open source Bitfeed, with a refreshed interactive visualization.
+
+
+  Navigate between blocks with the arrow keys, follow transactions with the
+  watchlist, and enjoy improved fullscreen behavior, animations, and an optional
+  Bitcoin price chart. It runs alongside the original Bitfeed app and uses
+  your Umbrel Bitcoin Node.
+
+
+  Price information is fetched by your browser from blockchain.info. Optional
+  price charts use CoinGecko. These services can see your browser's IP address.
+  Bitfeed Remix is maintained independently of the original Bitfeed project.
+releaseNotes: ""
+developer: Mononaut and kakulukia
+website: https://github.com/kakulukia/bitfeed
+dependencies:
+  - bitcoin
+repo: https://github.com/kakulukia/bitfeed
+support: https://github.com/kakulukia/bitfeed
+port: 8316
+gallery: []
+path: ""
+defaultUsername: ""
+defaultPassword: ""
+submitter: kakulukia
+# Source PR only; replace with the Umbrel PR URL for an official submission.
+submission: https://github.com/bitfeed-project/bitfeed/pull/69
+icon: https://raw.githubusercontent.com/kakulukia/bitfeed/65daa3c9fc54c58834ede2f6005aa3a7120ec1f7/client/public/android-chrome-512x512.png

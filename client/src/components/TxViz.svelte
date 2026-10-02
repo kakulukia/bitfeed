@@ -4,25 +4,27 @@
   import TxRender from './TxRender.svelte'
   import getTxStream from '../controllers/TxStream.js'
   import { settings, overlay, serverConnected, serverDelay, txCount, mempoolCount,
-           mempoolScreenHeight, blockVisible, tinyScreen,
+           mempoolScreenHeight, mempoolScreenLeft, blockVisible, tinyScreen,
            compactScreen, currentBlock, latestBlockHeight, selectedTx, blockAreaSize,
-           devEvents, devSettings, pageWidth, pageHeight, loading, freezeResize } from '../stores.js'
+           replayBlockTrigger, devEvents, devSettings, pageWidth, pageHeight, loading, freezeResize, fullscreenActive } from '../stores.js'
   import BlockInfo from '../components/BlockInfo.svelte'
   import SearchBar from '../components/SearchBar.svelte'
   import TxInfo from '../components/TxInfo.svelte'
   import Sidebar from '../components/Sidebar.svelte'
   import TransactionOverlay from '../components/TransactionOverlay.svelte'
   import AboutOverlay from '../components/AboutOverlay.svelte'
+  import PriceChartBackground from '../components/PriceChartBackground.svelte'
   import DonationOverlay from '../components/DonationOverlay.svelte'
   import SupportersOverlay from '../components/SupportersOverlay.svelte'
   import LoadingAnimation from '../components/util/LoadingAnimation.svelte'
   import Alerts from '../components/alert/Alerts.svelte'
-  import { numberFormat } from '../utils/format.js'
-  import { exchangeRates, lastBlockId, haveSupporters, sidebarToggle } from '../stores.js'
+  import { formatMempoolBlockEstimate, numberFormat } from '../utils/format.js'
+  import { exchangeRates, lastBlockId, haveSupporters, priceChartChange } from '../stores.js'
   import { formatCurrency } from '../utils/fx.js'
   import { fade } from 'svelte/transition'
   import config from '../config.js'
 
+  const clickToDrop = new URLSearchParams(window.location.search).has('dropOnClick')
   let width = window.innerWidth - 20
   let height = window.innerHeight - 20
   let txController
@@ -30,6 +32,31 @@
   let running = false
 
   let lastFrameUpdate = 0
+  const blockFullOpacityMs = 21000
+  const blockFreshStartDelayMs = 6900
+  const blockReturnFreshStartDelayMs = 2000
+  const blockFreshDurationMs = (blockFullOpacityMs - blockFreshStartDelayMs) / 3
+  const blockDimOpacity = 0.21
+  let blockOpacityTimeout
+  let blockFreshTimeout
+  let blockFreshEndTimeout
+  let blockOpacityBlockId
+  let blockFullOpacityUntil = 0
+  let blockFresh = false
+  let rehideBlockAfterAuraId = null
+  let nextBlockFreshStartDelayMs = blockFreshStartDelayMs
+  let blockHover = false
+  let blockDisplayOpacity = blockDimOpacity
+  let lastReplayBlockTrigger = 0
+  let roundedMempoolCount = 0
+  let mempoolVbytes = 0
+  let mempoolBlockEstimate = null
+  let mempoolReady = config.noTxFeed
+  let startupLoading = true
+
+  $: roundedMempoolCount = Math.round($mempoolCount)
+  $: mempoolBlockEstimate = formatMempoolBlockEstimate(mempoolVbytes)
+  $: if (mempoolReady && (config.noBlockFeed || $currentBlock)) startupLoading = false
 
   let txStream
   if (!config.noTxFeed || !config.noBlockFeed) txStream = getTxStream()
@@ -39,6 +66,20 @@
       if (txController) txController.showBlock()
     } else {
       if (txController) txController.hideBlock()
+    }
+  }
+
+  $: {
+    if (txController && $currentBlock && $currentBlock.id !== blockOpacityBlockId) {
+      showNewBlockAtFullOpacity($currentBlock, nextBlockFreshStartDelayMs)
+      nextBlockFreshStartDelayMs = blockFreshStartDelayMs
+    }
+  }
+
+  $: {
+    if (txController && $replayBlockTrigger > lastReplayBlockTrigger) {
+      lastReplayBlockTrigger = $replayBlockTrigger
+      replayBlock()
     }
   }
 
@@ -79,14 +120,25 @@
     if (!config.noBlockFeed) {
       txStream.subscribe('block', ({block, realtime}) => {
         if (block) {
+          const rehideAfterAura = $currentBlock && !$blockVisible
           const added = txController.addBlock(block, realtime)
-          if (added && added.id) $lastBlockId = added.id
+          if (added && added.id) {
+            rehideBlockAfterAuraId = rehideAfterAura ? added.id : null
+            $lastBlockId = added.id
+          }
         }
       })
     }
     if (!config.noTxFeed || !config.noBlockFeed) {
-      txStream.subscribe('mempool_count', count => {
-        $mempoolCount = count
+      txStream.subscribe('mempool_count', mempool => {
+        mempoolReady = true
+        if (typeof mempool === 'number') {
+          $mempoolCount = mempool
+          mempoolVbytes = 0
+        } else {
+          $mempoolCount = mempool.count
+          mempoolVbytes = mempool.vbytes || 0
+        }
       })
     }
 
@@ -119,11 +171,79 @@
   }
 
   function hideBlock () {
+    stopFreshBlockAura()
+    rehideBlockAfterAuraId = null
     $blockVisible = false
   }
 
   function quitExploring () {
-    if (txController) txController.resumeLatest()
+    if (txController) {
+      nextBlockFreshStartDelayMs = blockReturnFreshStartDelayMs
+      txController.resumeLatest()
+    }
+  }
+
+  function showNewBlockAtFullOpacity (block, freshStartDelayMs = blockFreshStartDelayMs) {
+    if (blockOpacityTimeout) clearTimeout(blockOpacityTimeout)
+    blockOpacityBlockId = block.id
+    blockFullOpacityUntil = Date.now() + blockFullOpacityMs
+    scheduleFreshBlockAura(block, freshStartDelayMs)
+
+    if (!blockHover) setBlockOpacity(Date.now() < blockFullOpacityUntil ? 1 : blockDimOpacity, 250)
+    if (Date.now() < blockFullOpacityUntil) {
+      blockOpacityTimeout = setTimeout(() => {
+        if ($currentBlock && $currentBlock.id === block.id && !blockHover) {
+          setBlockOpacity(blockDimOpacity, 1200)
+        }
+        if ($currentBlock && $currentBlock.id === block.id) blockFresh = false
+      }, blockFullOpacityUntil - Date.now())
+    }
+  }
+
+  function stopFreshBlockAura () {
+    if (blockFreshTimeout) clearTimeout(blockFreshTimeout)
+    if (blockFreshEndTimeout) clearTimeout(blockFreshEndTimeout)
+    blockFresh = false
+  }
+
+  function scheduleFreshBlockAura (block, startDelayMs) {
+    stopFreshBlockAura()
+
+    blockFreshTimeout = setTimeout(() => {
+      if ($currentBlock && $currentBlock.id === block.id && block.height === $latestBlockHeight) {
+        blockFresh = true
+        blockFreshEndTimeout = setTimeout(() => {
+          if ($currentBlock && $currentBlock.id === block.id) {
+            blockFresh = false
+            if (rehideBlockAfterAuraId === block.id) hideBlock()
+          }
+        }, blockFreshDurationMs)
+      }
+    }, startDelayMs)
+  }
+
+  function setBlockOpacity (opacity, duration=250) {
+    blockDisplayOpacity = opacity
+    if (txController) txController.setBlockOpacity(opacity, duration)
+  }
+
+  function restoreBlockOpacity () {
+    setBlockOpacity(Date.now() < blockFullOpacityUntil ? 1 : blockDimOpacity, 250)
+  }
+
+  function replayBlock () {
+    if (txController) txController.replayLatestBlock()
+    if ($currentBlock) showNewBlockAtFullOpacity($currentBlock)
+  }
+
+  function focusBlock () {
+    blockHover = true
+    setBlockOpacity(1, 250)
+  }
+
+  function dimBlock () {
+    blockHover = false
+    restoreBlockOpacity()
   }
 
   function fakeBlock () {
@@ -159,11 +279,35 @@
   $: connectionTitle = ($serverConnected && $serverDelay < 5000) ? ($serverDelay < 500 ? 'Streaming live transactions' : 'Unstable connection') : 'Disconnected'
 
   const fxColor = 'good'
+  const priceChartModes = ['none', '1d', '30d']
   let fxLabel = ''
+  let priceChartModeLabel = ''
+  let priceChartLabel = ''
+  let priceChartTrend = 'good'
+  let priceChartFocused = false
   $: {
     const rate = $exchangeRates[$settings.currency]
     if (rate && rate.last)
     fxLabel = formatCurrency($settings.currency, rate.last)
+  }
+  $: {
+    const chartMode = $settings.priceChartMode || '30d'
+    const chartCurrency = ($settings.currency || 'USD').toLowerCase()
+    priceChartModeLabel = chartMode.toUpperCase()
+    priceChartLabel = priceChartModeLabel
+    priceChartTrend = 'good'
+    if ($priceChartChange && $priceChartChange.mode === chartMode && $priceChartChange.currency === chartCurrency) {
+      const percent = $priceChartChange.percent
+      const sign = percent > 0 ? '+' : ''
+      priceChartLabel = `${priceChartLabel} ${sign}${percent}%`
+      priceChartTrend = $priceChartChange.trend
+    }
+  }
+
+  function togglePriceChart () {
+    const current = $settings.priceChartMode || '30d'
+    const next = priceChartModes[(priceChartModes.indexOf(current) + 1) % priceChartModes.length]
+    settings.set({ ...$settings, priceChartMode: next })
   }
 
 	const debounce = v => {
@@ -184,7 +328,7 @@
       x: e.clientX,
       y: window.innerHeight - e.clientY
     }
-    if (txController) txController.mouseClick(position)
+    if (txController) txController.mouseClick(position, clickToDrop)
   }
 
   function pointerMove (e) {
@@ -236,17 +380,18 @@
 
   .mempool-height {
     position: absolute;
+    z-index: 2;
     bottom: calc(25% + 10px);
     left: 0;
     right: 0;
     margin: auto;
-    padding: 0 .5rem;
+    padding: 0;
     transition: bottom 1000ms;
 
     .mempool-count {
       position: absolute;
       bottom: .5em;
-      left: 0.5rem;
+      left: var(--mempool-left);
       font-size: 0.9rem;
       color: var(--palette-x);
     }
@@ -254,7 +399,7 @@
     .mempool-info {
       position: absolute;
       bottom: .5em;
-      left: 0.5rem;
+      left: var(--mempool-left);
       right: 0.5em;
       font-size: 0.9rem;
       color: var(--palette-x);
@@ -265,10 +410,49 @@
     }
 
     .height-bar {
+      position: relative;
       width: 100%;
       height: 1px;
-      border-bottom: dashed 2px var(--palette-x);
-      opacity: 0.75;
+      opacity: 0.85;
+      transform: translateY(-2px);
+
+      &::before,
+      &::after {
+        content: '';
+        position: absolute;
+        left: 0;
+        right: 0;
+        pointer-events: none;
+      }
+
+      &::before {
+        top: -7px;
+        height: 18px;
+        background:
+          linear-gradient(90deg, transparent 0%, rgba(18, 245, 214, 0.26) 50%, transparent 100%),
+          linear-gradient(90deg, transparent 0%, rgba(18, 245, 214, 0.22) 50%, transparent 100%),
+          linear-gradient(90deg, transparent 0%, rgba(18, 245, 214, 0.3) 50%, transparent 100%),
+          linear-gradient(90deg, transparent 0%, rgba(18, 245, 214, 0.18) 50%, transparent 100%);
+        background-size: 15rem 100%, 22rem 100%, 31rem 100%, 18rem 100%;
+        filter: blur(5px);
+        opacity: 0.6;
+        z-index: 1;
+        animation: mempool-tide-fancy 18s linear infinite;
+      }
+
+      &::after {
+        top: 1px;
+        height: 2px;
+        background:
+          linear-gradient(90deg, transparent 43%, rgba(18, 245, 214, 0.78) 50%, transparent 57%),
+          linear-gradient(90deg, transparent 46%, rgba(18, 245, 214, 0.62) 50%, transparent 54%),
+          linear-gradient(90deg, transparent 40%, rgba(18, 245, 214, 0.72) 50%, transparent 60%),
+          linear-gradient(90deg, transparent 47%, rgba(18, 245, 214, 0.56) 50%, transparent 53%);
+        background-size: 15rem 100%, 22rem 100%, 31rem 100%, 18rem 100%;
+        opacity: 0.45;
+        z-index: 2;
+        animation: mempool-tide-fancy 18s linear infinite;
+      }
     }
   }
 
@@ -285,6 +469,7 @@
 
   .top-bar {
     position: absolute;
+    z-index: 3;
     top: 0;
     left: 0;
     right: 0;
@@ -308,6 +493,13 @@
 
       .row {
         margin-bottom: 5px;
+      }
+
+      .status-row {
+        display: flex;
+        align-items: center;
+        gap: 0.35rem;
+        height: 0.72rem;
       }
 
       .status-light {
@@ -347,6 +539,29 @@
         color: white;
       }
 
+      .price-chart-mode {
+        color: var(--palette-good);
+        display: inline-flex;
+        align-items: center;
+        font-size: 0.72rem;
+        font-weight: bold;
+        line-height: 1;
+        opacity: 0.2;
+        transition: opacity 300ms;
+
+        &.focused {
+          opacity: 1;
+        }
+
+        &.bad {
+          color: var(--palette-bad);
+        }
+
+        &.good {
+          color: var(--palette-good);
+        }
+      }
+
       &.tiny {
         width: 100%;
         .row {
@@ -354,6 +569,10 @@
           display: flex;
           flex-direction: row;
           justify-content: space-between;
+        }
+
+        .status-row {
+          justify-content: flex-start;
         }
       }
     }
@@ -374,6 +593,8 @@
   }
 
   .block-area-wrapper {
+    position: relative;
+    z-index: 2;
     height: 100%;
     display: flex;
     flex-direction: column;
@@ -386,12 +607,43 @@
     .block-area-outer {
       position: relative;
       flex: 0;
+      pointer-events: auto;
       // width: 75vw;
       // max-width: 40vh;
       margin: auto;
 
       .block-area {
+        position: relative;
+        z-index: 1;
         padding-top: 100%;
+      }
+
+      &.block-fresh {
+        --fresh-angle: 0deg;
+
+        &::before,
+        &::after {
+          content: '';
+          display: block;
+          position: absolute;
+          z-index: 2;
+          inset: -0.35rem;
+          border-radius: 3px;
+          box-sizing: border-box;
+          pointer-events: none;
+        }
+
+        &::before {
+          border: 2px solid rgba(247, 147, 26, 0.35);
+          box-shadow: 0 0 18px rgba(247, 147, 26, 0.75), inset 0 0 10px rgba(247, 147, 26, 0.22);
+          animation: block-fresh-fade var(--fresh-duration) ease-out 1 forwards;
+        }
+
+        &::after {
+          border: 2px solid transparent;
+          border-image: conic-gradient(from var(--fresh-angle), transparent 0deg 284deg, rgba(247, 147, 26, 0.3) 302deg, #f7931a 326deg, rgba(255, 122, 0, 0.6) 345deg, transparent 360deg) 1;
+          animation: block-fresh-spin var(--fresh-duration) linear 1 forwards, block-fresh-fade var(--fresh-duration) ease-out 1 forwards;
+        }
       }
 
       .guide-area {
@@ -490,30 +742,105 @@
       width: 18em;
     }
   }
+
+  .tx-area.ambient-mode {
+    .top-bar {
+      pointer-events: none;
+
+      .search-bar-wrapper,
+      .alert-bar-wrapper,
+      .block-height,
+      .status .row:not(:first-child) {
+        opacity: 0;
+      }
+
+      .fx-ticker {
+        text-shadow: 0 0 8px var(--palette-y);
+      }
+    }
+
+    .mempool-height {
+      .height-bar {
+        opacity: 0.35;
+      }
+
+      .mempool-count,
+      .mempool-info {
+        font-size: 1rem;
+        text-shadow: 0 0 8px var(--palette-y);
+      }
+    }
+  }
+
+  @property --fresh-angle {
+    syntax: '<angle>';
+    initial-value: 0deg;
+    inherits: false;
+  }
+
+  @keyframes block-fresh-spin {
+    to {
+      --fresh-angle: 720deg;
+    }
+  }
+
+  @keyframes block-fresh-fade {
+    0% {
+      opacity: 0;
+    }
+    15% {
+      opacity: 1;
+    }
+    80% {
+      opacity: 0.75;
+    }
+    100% {
+      opacity: 0;
+    }
+  }
+
+  @keyframes mempool-tide {
+    from {
+      background-position-x: 0;
+    }
+    to {
+      background-position-x: 18rem;
+    }
+  }
+
+  @keyframes mempool-tide-fancy {
+    from {
+      background-position: 0 0, 0 0, 0 0, 0 0;
+    }
+    to {
+      background-position: 30rem 0, -22rem 0, 62rem 0, -36rem 0;
+    }
+  }
 </style>
 
 <svelte:window on:resize={resize} on:load={resize} on:click={pointerLeave} />
 <!-- <svelte:window on:resize={resize} on:click={pointerMove} /> -->
 
-<div class="tx-area" class:light-mode={!$settings.darkMode} style="width: {canvasWidth}; height: {canvasHeight}">
+<div class="tx-area" class:light-mode={!$settings.darkMode} class:ambient-mode={$fullscreenActive} style="width: {canvasWidth}; height: {canvasHeight}">
   <div class="canvas-wrapper" on:pointerleave={pointerLeave} on:pointermove={pointerMove} on:click={onClick}>
+    <PriceChartBackground focused={priceChartFocused} />
     <TxRender controller={txController} />
 
-    <div class="mempool-height" style="bottom: calc({$mempoolScreenHeight + 20}px)">
+    <div class="mempool-height" style="bottom: calc({$mempoolScreenHeight + 20}px); --mempool-left: {$mempoolScreenLeft}px">
       <div class="height-bar" />
       {#if $tinyScreen}
         <div class="mempool-info">
           <span class="left">Mempool</span>
-          <span class="right">{ numberFormat.format(Math.round($mempoolCount)) }</span>
+          <span class="right">{ numberFormat.format(roundedMempoolCount) }</span>
         </div>
       {:else}
-        <span class="mempool-count">Mempool: { numberFormat.format(Math.round($mempoolCount)) } unconfirmed</span>
+        <span class="mempool-count">Mempool: { numberFormat.format(roundedMempoolCount) } tx{#if mempoolBlockEstimate}{' / '}{mempoolBlockEstimate}{/if} unconfirmed</span>
       {/if}
     </div>
 
     <div class="block-area-wrapper">
       <div class="spacer" style="flex: {$pageWidth <= 640 ? '1.5' : '1'}"></div>
-      <div class="block-area-outer" style="width: {$blockAreaSize}px; height: {$blockAreaSize}px">
+      <div class="block-area-outer" class:block-fresh={blockFresh} style="width: {$blockAreaSize}px; height: {$blockAreaSize}px; --block-control-opacity: {blockDisplayOpacity}; --fresh-duration: {blockFreshDurationMs}ms" on:pointerenter={focusBlock} on:pointerleave={dimBlock}>
         <div class="block-area">
           <BlockInfo block={$currentBlock} visible={$blockVisible && !$tinyScreen} on:hideBlock={hideBlock} on:quitExploring={quitExploring} />
         </div>
@@ -534,15 +861,18 @@
     <div class="status" class:tiny={$tinyScreen}>
       <div class="row">
         {#if $settings.showFX && fxLabel }
-          <span class="fx-ticker {fxColor}" on:click={() => { $sidebarToggle = 'settings'}}>{ fxLabel }</span>
+          <span class="fx-ticker {fxColor}" on:click={togglePriceChart} on:pointerenter={() => priceChartFocused = true} on:pointerleave={() => priceChartFocused = false}>{ fxLabel }</span>
         {/if}
         {#if $tinyScreen && $currentBlock }
           <span class="block-height"><b>Block: </b>{ numberFormat.format($currentBlock.height) }</span>
         {/if}
       </div>
-      <div class="row">
+      <div class="row status-row">
         {#if $settings.showNetworkStatus }
           <div class="status-light {connectionColor}" title={connectionTitle}></div>
+        {/if}
+        {#if $settings.priceChartMode !== 'none' }
+          <span class="price-chart-mode {priceChartTrend}" class:focused={priceChartFocused}>{ priceChartFocused ? priceChartLabel : priceChartModeLabel }</span>
         {/if}
       </div>
     </div>
@@ -573,8 +903,8 @@
     {/if}
   {/if}
 
-  {#if $loading}
-    <div class="loading-overlay" in:fade={{ delay: 1000, duration: 500 }} out:fade={{ duration: 200 }}>
+  {#if startupLoading || $loading}
+    <div class="loading-overlay" in:fade={{ delay: startupLoading ? 0 : 1000, duration: 500 }} out:fade={{ duration: 200 }}>
       <div class="loading-wrapper">
         <LoadingAnimation />
         <p class="loading-msg">loading</p>
